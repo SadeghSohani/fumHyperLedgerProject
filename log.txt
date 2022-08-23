@@ -1,0 +1,2 @@
+Installed chaincodes on peer:
+Package ID: broilerChickenCC_1:307211382f4601ed674f11372902df250e42d745756070d4e41a706da24d9fb5, Label: broilerChickenCC_1
