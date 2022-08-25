@@ -199,7 +199,7 @@ const buyToken = async (channelName, chaincodeName, username, org_name, user, pr
     }
 }
 
-const setChickenPublicForBuy = async (channelName, chaincodeName, username, org_name, chickenId, owner) => {
+const setChickenPublicForSale = async (channelName, chaincodeName, username, org_name, chickenId, owner) => {
     try {
         logger.debug(util.format('\n============ invoke transaction on channel %s ============\n', channelName));
 
@@ -327,7 +327,7 @@ const transferToken = async (channelName, chaincodeName, username, org_name, sen
     }
 }
 
-const bidForAsset = async (channelName, chaincodeName, username, org_name, assetId , customer , assetOwner , price) => {
+const blockingToken = async (channelName, chaincodeName, username, org_name, customer, price) => {
     try {
 
         logger.debug(util.format('\n============ invoke transaction on channel %s ============\n', channelName));
@@ -369,7 +369,7 @@ const bidForAsset = async (channelName, chaincodeName, username, org_name, asset
         let result
         let message;
 
-        result = await contract.submitTransaction("bidForAsset", assetId , customer , assetOwner , price);
+        result = await contract.submitTransaction("blockingToken", customer , price);
         message = `Transaction successful.`
 
         await gateway.disconnect();
@@ -377,6 +377,7 @@ const bidForAsset = async (channelName, chaincodeName, username, org_name, asset
         result = JSON.parse(result.toString());
 
         let response = {
+            staus: 200,
             message: message,
             result
         }
@@ -385,14 +386,17 @@ const bidForAsset = async (channelName, chaincodeName, username, org_name, asset
 
 
     } catch (error) {
-
+        let response = {
+            staus: 400,
+            message: error.message
+        }
         console.log(`Getting error: ${error}`)
-        return error.message
+        return response;
 
     }
 }
 
-const sellChicken = async (channelName, chaincodeName, username, org_name, id, owner, customer) => {
+const sellChicken = async (channelName, chaincodeName, username, org_name, id, owner, customer, price, biders, bids) => {
     try {
         
         logger.debug(util.format('\n============ invoke transaction on channel %s ============\n', channelName));
@@ -432,9 +436,9 @@ const sellChicken = async (channelName, chaincodeName, username, org_name, id, o
         const contract = network.getContract(chaincodeName);
 
         let result
-        let message;
+        let message;       
 
-        result = await contract.submitTransaction("sellChicken", id, owner, customer);
+        result = await contract.submitTransaction("sellChicken", id, owner, customer, price, biders, bids);
         message = `Transaction successful.`
 
         await gateway.disconnect();
@@ -442,6 +446,7 @@ const sellChicken = async (channelName, chaincodeName, username, org_name, id, o
         result = JSON.parse(result.toString());
 
         let response = {
+            staus: 200,
             message: message,
             result
         }
@@ -451,9 +456,13 @@ const sellChicken = async (channelName, chaincodeName, username, org_name, id, o
 
     } catch (error) {
 
-        console.log(`Getting error: ${error}`)
-        return error.message
+        let response = {
+            staus: 400,
+            message: error.message
+        }
 
+        return response;
+        
     }
 }
 
@@ -590,9 +599,9 @@ const putGrowthInformation = async (channelName, chaincodeName, username, org_na
 exports.changeChickenOwner = changeChickenOwner;
 exports.createChicken = createChicken;
 exports.buyToken = buyToken;
-exports.setChickenPublicForBuy = setChickenPublicForBuy;
+exports.setChickenPublicForSale = setChickenPublicForSale;
 exports.transferToken = transferToken;
-exports.bidForAsset = bidForAsset;
+exports.blockingToken = blockingToken;
 exports.sellChicken = sellChicken;
 exports.setChickenPrice = setChickenPrice;
 exports.putGrowthInformation = putGrowthInformation;

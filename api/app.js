@@ -36,13 +36,24 @@ const databaseCon = mysql.createConnection(
 );
 
 var mongo = require('mongodb');
-var MongoClient = require('mongodb').MongoClient;
+var MongoClient = mongo.MongoClient;
 var url = "mongodb://localhost:27017/mydb";
 MongoClient.connect(url, function(err, db) {
   if (err) throw err;
   console.log("Database created!");
   db.close();
 });
+url = "mongodb://localhost:27017/";
+
+// MongoClient.connect(url, function(err, db) {
+//     if (err) throw err;
+//     var dbo = db.db("mydb");
+//     dbo.collection("Market").drop(function(err, delOK) {
+//       if (err) throw err;
+//       if (delOK) console.log("Collection deleted");
+//       db.close();
+//     });
+//   }); 
 
 app.options('*', cors());
 app.use(cors());
@@ -100,72 +111,23 @@ function getErrorMessage(field) {
     return response;
 }
 
-// Register and enroll user
-app.post('/users', async function (req, res) {
-    var username = req.body.username;
-    var password = req.body.password;
-    var orgName = req.body.orgName;
-    logger.debug('End point : /users');
-    logger.debug('User name : ' + username);
-    logger.debug('Org name  : ' + orgName);
-    if (!username) {
-        res.json(getErrorMessage('\'username\''));
-        return;
-    }
-    if (!orgName) {
-        res.json(getErrorMessage('\'orgName\''));
-        return;
-    }
+const adminUsername = "Admin@username";
+const adminPassword = "12345678";
 
-    databaseCon.connect(
-        function(err){
-            if (err) {
-                console.log(err);
-                return;
-            }
-            console.log("Connected to database.");
-            var sql = "SELECT * FROM organizations WHERE `username` = '"+username+"' AND `password` = '"+password+"'";
-            databaseCon.query(sql, async function (err, result) {
-                var resLength = 0;
-                if (err) {
-                    console.log(err);
-                    // return;
-                } else {
-                    resLength = result.length;
-                }
-                if (resLength != 0 || (username == "Admin@username" && password == "12345678")){
-                    var token = jwt.sign({
-                        exp: Math.floor(Date.now() / 1000) + parseInt(constants.jwt_expiretime),
-                        username: username,
-                        orgName: orgName
-                    }, app.get('secret'));
-                
-                    let response = await helper.getRegisteredUser(username, orgName, true);
-                
-                    logger.debug('-- returned from registering the username %s for organization %s', username, orgName);
-                    if (response && typeof response !== 'string') {
-                        logger.debug('Successfully registered the username %s for organization %s', username, orgName);
-                        response.token = token;
-                        res.json(response);
-                    } else {
-                        logger.debug('Failed to register the username %s for organization %s with::%s', username, orgName, response);
-                        res.json({ success: false, message: response });
-                    }
-                } else {
-                    res.json({ success: true, message: "Invalid username or password."});
-                }
+//----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+//------------------------------------User database(SQL)----------------------------------------
+//----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
 
-            });
-        }
-    );
-    
-
-});
-
-app.post('/database/query', async function(req, res){
+app.post('/database/table/create', async function(req, res){
 
     var sql = req.body.sql;
     
+    if (req.username != adminUsername) {
+        res.json({ success: false, message: "Permission denied."});
+    }
+
     databaseCon.connect(
         function(err){
             if (err) {
@@ -188,7 +150,41 @@ app.post('/database/query', async function(req, res){
 
 });
 
+app.post('/database/table/drop', async function(req, res){
+
+    var table = req.body.table;
+    
+    if (req.username != adminUsername) {
+        res.json({ success: false, message: "Permission denied."});
+    }
+
+    databaseCon.connect(
+        function(err){
+            if (err) {
+                console.log(err);
+                return;
+            }
+            console.log("Connected!");
+            //var sql = "DROP TABLE organizations";
+            var sql = "DROP TABLE " + table;
+            databaseCon.query(sql, function (err, result) {
+                if (err) {
+                    console.log(err);
+                    res.json({ success: false, message: err});
+                    return;
+                }
+                res.json({ success: true, message: result});
+            });
+        }
+    );
+
+});
+
 app.post('/organizations/insert', async function(req, res){
+
+    if (req.username != adminUsername) {
+        res.json({ success: false, message: "Permission denied."});
+    }
 
     var usernames = req.body.usernames;
     var passwords = req.body.passwords;
@@ -230,6 +226,10 @@ app.post('/organizations/insert', async function(req, res){
 
 app.get('/organizations', async function(req, res){
 
+    if (req.username != adminUsername) {
+        res.json({ success: false, message: "Permission denied."});
+    }
+
     databaseCon.connect(
         function(err){
             if (err) {
@@ -247,6 +247,129 @@ app.get('/organizations', async function(req, res){
             });
         }
     );
+
+});
+
+//----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+//------------------------------------Market database(MongoDb)----------------------------------------
+//----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+
+app.post('/collection/create', async function(req, res){
+
+    var name = req.body.name;
+    
+    if (req.username != adminUsername) {
+        res.json({ success: false, message: "Permission denied."});
+    }
+
+    MongoClient.connect(url, function(err, db) {
+        if (err) {
+            console.log(err);
+            res.json({ success: false, message: err});
+        }
+        var dbo = db.db("mydb");
+        dbo.createCollection(name, function(err, result) {
+            if (err) {
+                console.log(err);
+                res.json({ success: false, message: err});
+            }
+            console.log("Collection created!");
+            res.json({ success: true, message: "Collection created!"});
+            db.close();
+        });
+    }); 
+
+});
+
+app.get('/collection/:collectionName/objects', async function(req, res){
+
+    var collectionName = req.params.collectionName;
+    
+    MongoClient.connect(url, function(err, db) {
+        if (err) throw err;
+        var dbo = db.db("mydb");
+        dbo.collection(collectionName).find({}).toArray(function(err, result) {
+
+            if (err) {
+                console.log(err);
+                res.json({ success: false, message: err});
+            }
+            console.log(result);
+            res.json({ success: true, message: result});
+            db.close();
+
+        });
+    }); 
+
+});
+
+//----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+//------------------------------------Register and login----------------------------------------
+//----------------------------------------------------------------------------------------------
+//----------------------------------------------------------------------------------------------
+
+// Register and enroll user
+app.post('/users', async function (req, res) {
+    var username = req.body.username;
+    var password = req.body.password;
+    var orgName = req.body.orgName;
+    logger.debug('End point : /users');
+    logger.debug('User name : ' + username);
+    logger.debug('Org name  : ' + orgName);
+    if (!username) {
+        res.json(getErrorMessage('\'username\''));
+        return;
+    }
+    if (!orgName) {
+        res.json(getErrorMessage('\'orgName\''));
+        return;
+    }
+
+    databaseCon.connect(
+        function(err){
+            if (err) {
+                console.log(err);
+                return;
+            }
+            console.log("Connected to database.");
+            var sql = "SELECT * FROM organizations WHERE `username` = '"+username+"' AND `password` = '"+password+"'";
+            databaseCon.query(sql, async function (err, result) {
+                var resLength = 0;
+                if (err) {
+                    console.log(err);
+                    // return;
+                } else {
+                    resLength = result.length;
+                }
+                if (resLength != 0 || (username == adminUsername && password == adminPassword)){
+                    var token = jwt.sign({
+                        exp: Math.floor(Date.now() / 1000) + parseInt(constants.jwt_expiretime),
+                        username: username,
+                        orgName: orgName
+                    }, app.get('secret'));
+                
+                    let response = await helper.getRegisteredUser(username, orgName, true);
+                
+                    logger.debug('-- returned from registering the username %s for organization %s', username, orgName);
+                    if (response && typeof response !== 'string') {
+                        logger.debug('Successfully registered the username %s for organization %s', username, orgName);
+                        response.token = token;
+                        res.json(response);
+                    } else {
+                        logger.debug('Failed to register the username %s for organization %s with::%s', username, orgName, response);
+                        res.json({ success: false, message: response });
+                    }
+                } else {
+                    res.json({ success: true, message: "Invalid username or password."});
+                }
+
+            });
+        }
+    );
+    
 
 });
 
@@ -484,17 +607,20 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/token/buy', async fun
     }
 });
 
-app.post('/channels/:channelName/chaincodes/:chaincodeName/chicken/public', async function (req, res) {
+app.post('/channels/:channelName/chaincodes/:chaincodeName/collection/:collectionName/chicken/public', async function (req, res) {
     try {
         logger.debug('==================== INVOKE ON CHAINCODE ==================');
         var chaincodeName = req.params.chaincodeName;
         var channelName = req.params.channelName;
+        var collectionName = req.params.collectionName
         var assetId = req.body.assetId;
+        var price = req.body.price;
 
         let user = req.username;
 
         logger.debug('channelName  : ' + channelName);
         logger.debug('chaincodeName : ' + chaincodeName);
+        logger.debug('chaincodeName : ' + collectionName);
         logger.debug('assetId  : ' + assetId);
         logger.debug('user  : ' + user);
         if (!chaincodeName) {
@@ -509,17 +635,46 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/chicken/public', asyn
             res.json(getErrorMessage('\'assetId\''));
             return;
         }
+        if (!collectionName) {
+            res.json(getErrorMessage('\'collectionName\''));
+            return;
+        }
 
-        let message = await invoke.setChickenPublicForBuy(channelName, chaincodeName, req.username, req.orgname, assetId, user);
+        let message = await invoke.setChickenPublicForSale(channelName, chaincodeName, req.username, req.orgname, assetId, user);
         console.log(`message result is : ${message}`)
 
-        const response_payload = {
-            result: message,
-            error: null,
-            errorData: null
-        }
-        res.send(response_payload);
+        var chicken = message.result;
+        if (chicken.forSale) {
 
+            MongoClient.connect(url, function(err, db) {
+                if (err) {
+                    console.log(err);
+                    res.json({ success: false, message: err});
+                }
+                var dbo = db.db("mydb");
+                var myobj = { _id: assetId, asset: chicken, price: price, bids: {} };
+                dbo.collection(collectionName).insertOne(myobj, function(err, result) {
+                    if (err) {
+                        console.log(err);
+                        res.json({ success: false, message: err});
+                    }
+                    console.log("1 document inserted");
+                    const response_payload = {
+                        result: message,
+                        error: null,
+                        errorData: null
+                    }
+                    res.send(response_payload); 
+                    db.close();
+                });
+            }); 
+
+               
+        } else {
+            res.send({success: false, error: "This asset isn`t for sale."});
+        }
+
+        
     } catch (error) {
         const response_payload = {
             result: null,
@@ -620,15 +775,45 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/asset/bid', async fun
             return;
         }
 
-        let message = await invoke.bidForAsset(channelName, chaincodeName, req.username, req.orgname, assetId , customer , assetOwner , price);
+        let message = await invoke.blockingToken(channelName, chaincodeName, req.username, req.orgname, customer , price);
         console.log(`message result is : ${message}`)
 
-        const response_payload = {
-            result: message,
-            error: null,
-            errorData: null
+        if(message.staus == 200) {
+            MongoClient.connect(url, function(err, db) {
+                if (err) throw err;
+                var dbo = db.db("mydb");
+                var query = { _id: assetId };
+                dbo.collection("Market").find(query).toArray(function(err, result) {
+                    if (err) {
+                        console.log(err);
+                        res.json({ success: false, message: err});
+                    }
+                    var _result = result[0];
+                    _result.bids[customer] = price;
+                    var newvalues = { $set: _result };
+                    dbo.collection("Market").updateOne(query, newvalues, function(err, result) {
+                        if (err) {
+                            console.log(err);
+                            res.json({ success: false, message: err});
+                        }
+                        console.log("1 document updated");
+                        const response_payload = {
+                            result: message,
+                            error: null,
+                            errorData: null
+                        }
+                        db.close();
+                        res.send(response_payload);
+                        
+                    });
+                    
+                });
+            }); 
+        } else {
+            res.send({success: false, message: "Insufficient balance."});
         }
-        res.send(response_payload);
+
+        
 
     } catch (error) {
         const response_payload = {
@@ -669,15 +854,69 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/chicken/sell', async 
             return;
         }
 
-        let message = await invoke.sellChicken(channelName, chaincodeName, req.username, req.orgname, id, req.username, customer);
-        console.log(`message result is : ${message}`)
+        MongoClient.connect(url, function(err, db) {
+            if (err) throw err;
+            var dbo = db.db("mydb");
+            var query = { _id: id };
+            dbo.collection("Market").find(query).toArray(async function(err, result) {
+                if (err) {
+                    console.log(err);
+                    res.json({ success: false, message: err});
+                }
+                console.log(result);
+                // db.close();
+                var price = 0;
+                price = result[0].price;
 
-        const response_payload = {
-            result: message,
-            error: null,
-            errorData: null
-        }
-        res.send(response_payload);
+                var obj = result[0].bids;
+                var firstIterate = true;
+                var biders = "";
+                var bids = "";
+                for (var key in obj) {
+                    if (obj.hasOwnProperty(key) && key != customer) {
+                        if(!firstIterate) {
+                            biders = biders + "#";
+                            bids = bids + "#"
+                        }
+                        firstIterate = false;
+                        biders = biders + key;
+                        bids = bids + obj[key];
+                        
+                    }
+                }
+                biders = biders + "";
+                bids = bids + "";
+                console.log("Biders array : " + biders); 
+
+                let message = await invoke.sellChicken(channelName, chaincodeName, req.username, req.orgname, id, req.username, customer, price, biders, bids);
+                console.log(`message result is : ${message}`)
+        
+
+                if(message.staus == 200) {
+
+                    var myquery = { _id: id };
+                    dbo.collection("Market").deleteOne(myquery, function(err, obj) {
+                        if (err) {
+                            console.log(err);
+                            res.json({ success: false, message: err});
+                        }
+                        console.log("1 document deleted");
+                        
+                        const response_payload = {
+                            result: message,
+                            error: null,
+                            errorData: null
+                        }
+                        res.send(response_payload);
+                        db.close();
+                    });                    
+
+                } else {
+                    res.send({success: false, message: "Permission denied."});
+                }
+
+            });
+        }); 
 
     } catch (error) {
         const response_payload = {
@@ -1026,6 +1265,7 @@ app.get('/channels/:channelName/chaincodes/:chaincodeName/asset/bids', async fun
 
         logger.debug('channelName : ' + channelName);
         logger.debug('chaincodeName : ' + chaincodeName);
+        logger.debug('assetId : ' + assetId);
 
         if (!chaincodeName) {
             res.json(getErrorMessage('\'chaincodeName\''));
@@ -1035,16 +1275,39 @@ app.get('/channels/:channelName/chaincodes/:chaincodeName/asset/bids', async fun
             res.json(getErrorMessage('\'channelName\''));
             return;
         }
-
-        let message = await query.queryBidsOfAsset(channelName, chaincodeName, req.username, req.orgname, assetId, req.username);
-
-        const response_payload = {
-            result: message,
-            error: null,
-            errorData: null
+        if (!assetId) {
+            res.json(getErrorMessage('\'assetId\''));
+            return;
         }
 
-        res.send(response_payload);
+        // let message = await query.queryBidsOfAsset(channelName, chaincodeName, req.username, req.orgname, assetId, req.username);
+
+        MongoClient.connect(url, function(err, db) {
+            if (err) throw err;
+            var dbo = db.db("mydb");
+            var query = { _id: assetId };
+            dbo.collection("Market").find(query).toArray(function(err, result) {
+                if (err) {
+                    console.log(err);
+                    res.json({ success: false, message: err});
+                }
+                console.log(result);
+                db.close();
+                if(result[0].asset.owner == req.username) {
+                    const response_payload = {
+                        result: result[0].bids,
+                        error: null,
+                        errorData: null
+                    }
+            
+                    res.send(response_payload);
+                } else {
+                    res.send({success: false, message: "Permission denied."});
+                }
+
+            });
+        }); 
+
     } catch (error) {
         const response_payload = {
             result: null,
@@ -1055,45 +1318,45 @@ app.get('/channels/:channelName/chaincodes/:chaincodeName/asset/bids', async fun
     }
 });
 
-app.get('/channels/:channelName/chaincodes/:chaincodeName/chickens/public', async function (req, res) {
-    try {
-        logger.debug('==================== QUERY BY CHAINCODE ==================');
+// app.get('/channels/:channelName/chaincodes/:chaincodeName/chickens/public', async function (req, res) {
+//     try {
+//         logger.debug('==================== QUERY BY CHAINCODE ==================');
 
-        var channelName = req.params.channelName;
-        var chaincodeName = req.params.chaincodeName;
+//         var channelName = req.params.channelName;
+//         var chaincodeName = req.params.chaincodeName;
 
-        console.log(`chaincode name is :${chaincodeName}`);
+//         console.log(`chaincode name is :${chaincodeName}`);
 
-        logger.debug('channelName : ' + channelName);
-        logger.debug('chaincodeName : ' + chaincodeName);
+//         logger.debug('channelName : ' + channelName);
+//         logger.debug('chaincodeName : ' + chaincodeName);
 
-        if (!chaincodeName) {
-            res.json(getErrorMessage('\'chaincodeName\''));
-            return;
-        }
-        if (!channelName) {
-            res.json(getErrorMessage('\'channelName\''));
-            return;
-        }
+//         if (!chaincodeName) {
+//             res.json(getErrorMessage('\'chaincodeName\''));
+//             return;
+//         }
+//         if (!channelName) {
+//             res.json(getErrorMessage('\'channelName\''));
+//             return;
+//         }
 
-        let message = await query.queryPublicChickens(channelName, chaincodeName, req.username, req.orgname);
+//         let message = await query.queryPublicChickens(channelName, chaincodeName, req.username, req.orgname);
 
-        const response_payload = {
-            result: message,
-            error: null,
-            errorData: null
-        }
+//         const response_payload = {
+//             result: message,
+//             error: null,
+//             errorData: null
+//         }
 
-        res.send(response_payload);
-    } catch (error) {
-        const response_payload = {
-            result: null,
-            error: error.name,
-            errorData: error.message
-        }
-        res.send(response_payload)
-    }
-});
+//         res.send(response_payload);
+//     } catch (error) {
+//         const response_payload = {
+//             result: null,
+//             error: error.name,
+//             errorData: error.message
+//         }
+//         res.send(response_payload)
+//     }
+// });
 
 app.get('/qscc/channels/:channelName/chaincodes/:chaincodeName', async function (req, res) {
     try {

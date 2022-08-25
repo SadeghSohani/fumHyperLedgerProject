@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
@@ -20,14 +21,13 @@ type GrowthInformation struct {
 }
 
 type Chicken struct {
-	Type         string              `json:"type"`
-	Birthday     string              `json:"birthday"`
-	Breed        string              `json:"breed"`
-	Price        float64             `json:"price"`
-	Owner        string              `json:"owner"`
-	GrowthInf    GrowthInformation   `json:"growthInformation"`
-	PublicToSell bool                `json:"publicToSell"`
-	Bids         map[string]BidModel `json:"bids"`
+	Type      string            `json:"type"`
+	Birthday  string            `json:"birthday"`
+	Breed     string            `json:"breed"`
+	Price     float64           `json:"price"`
+	Owner     string            `json:"owner"`
+	GrowthInf GrowthInformation `json:"growthInformation"`
+	ForSale   bool              `json:"forSale"`
 }
 
 type QueryResult struct {
@@ -49,42 +49,36 @@ type Token struct {
 	BlockAmount float64 `json:"blockAmount"`
 }
 
-type BidModel struct {
-	AssetId  string  `json:"assetId"`
-	Customer string  `json:"customer"`
-	Price    float64 `json:"price"`
-}
-
 func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
 
-	gi := GrowthInformation{
-		Key:         "Vaccine",
-		Value:       "VC123",
-		Instruction: "This is the first vaccination.",
-	}
-	bids := make(map[string]BidModel)
+	// gi := GrowthInformation{
+	// 	Key:         "Vaccine",
+	// 	Value:       "VC123",
+	// 	Instruction: "This is the first vaccination.",
+	// }
+	// bids := make(map[string]BidModel)
 
-	chickens := []Chicken{
-		Chicken{Type: "Chicken", Birthday: "1401/5/18", Breed: "Ross", Price: 12.0, Owner: "Sadegh", GrowthInf: gi, PublicToSell: false, Bids: bids},
-		Chicken{Type: "Chicken", Birthday: "1401/5/18", Breed: "Cobb", Price: 10.0, Owner: "Sadegh", GrowthInf: gi, PublicToSell: false, Bids: bids},
-		Chicken{Type: "Chicken", Birthday: "1401/5/18", Breed: "Cobb", Price: 10.0, Owner: "Sadegh", GrowthInf: gi, PublicToSell: false, Bids: bids},
-		Chicken{Type: "Chicken", Birthday: "1401/5/18", Breed: "Ross", Price: 12.0, Owner: "Sadegh", GrowthInf: gi, PublicToSell: false, Bids: bids},
-	}
+	// chickens := []Chicken{
+	// 	Chicken{Type: "Chicken", Birthday: "1401/5/18", Breed: "Ross", Price: 12.0, Owner: "Sadegh", GrowthInf: gi, PublicToSell: false, Bids: bids},
+	// 	Chicken{Type: "Chicken", Birthday: "1401/5/18", Breed: "Cobb", Price: 10.0, Owner: "Sadegh", GrowthInf: gi, PublicToSell: false, Bids: bids},
+	// 	Chicken{Type: "Chicken", Birthday: "1401/5/18", Breed: "Cobb", Price: 10.0, Owner: "Sadegh", GrowthInf: gi, PublicToSell: false, Bids: bids},
+	// 	Chicken{Type: "Chicken", Birthday: "1401/5/18", Breed: "Ross", Price: 12.0, Owner: "Sadegh", GrowthInf: gi, PublicToSell: false, Bids: bids},
+	// }
 
-	for i, chicken := range chickens {
-		chickenAsBytes, _ := json.Marshal(chicken)
-		err := ctx.GetStub().PutState("CHICKEN"+strconv.Itoa(i), chickenAsBytes)
+	// for i, chicken := range chickens {
+	// 	chickenAsBytes, _ := json.Marshal(chicken)
+	// 	err := ctx.GetStub().PutState("CHICKEN"+strconv.Itoa(i), chickenAsBytes)
 
-		if err != nil {
-			return fmt.Errorf("Failed to put to world state. %s", err.Error())
-		}
-	}
+	// 	if err != nil {
+	// 		return fmt.Errorf("Failed to put to world state. %s", err.Error())
+	// 	}
+	// }
 
-	tokenAsBytes, _ := json.Marshal(Token{Type: "Token", User: "Sadegh", Amount: 0.0, BlockAmount: 0.0})
-	err := ctx.GetStub().PutState("Sadegh", tokenAsBytes)
-	if err != nil {
-		return fmt.Errorf("Failed to put to world state. %s", err.Error())
-	}
+	// tokenAsBytes, _ := json.Marshal(Token{Type: "Token", User: "Sadegh", Amount: 0.0, BlockAmount: 0.0})
+	// err := ctx.GetStub().PutState("Sadegh", tokenAsBytes)
+	// if err != nil {
+	// 	return fmt.Errorf("Failed to put to world state. %s", err.Error())
+	// }
 
 	return nil
 }
@@ -96,8 +90,7 @@ func (s *SmartContract) CreateChicken(ctx contractapi.TransactionContextInterfac
 		Value:       "VC123",
 		Instruction: "This is the first vaccination.",
 	}
-	bids := make(map[string]BidModel)
-	chicken := Chicken{Type: "Chicken", Birthday: birthday, Breed: breed, Price: price, Owner: owner, GrowthInf: gi, PublicToSell: false, Bids: bids}
+	chicken := Chicken{Type: "Chicken", Birthday: birthday, Breed: breed, Price: price, Owner: owner, GrowthInf: gi, ForSale: false}
 
 	chickenAsBytes, _ := json.Marshal(chicken)
 	err := ctx.GetStub().PutState(id, chickenAsBytes)
@@ -127,6 +120,28 @@ func (s *SmartContract) QueryChicken(ctx contractapi.TransactionContextInterface
 	_ = json.Unmarshal(chickenAsBytes, chicken)
 
 	return chicken, nil
+}
+
+func (s *SmartContract) QueryChickenByOwner(ctx contractapi.TransactionContextInterface, id string, owner string) (*Chicken, error) {
+	chickenAsBytes, err := ctx.GetStub().GetState(id)
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
+	}
+
+	if chickenAsBytes == nil {
+		return nil, fmt.Errorf("%s does not exist", id)
+	}
+
+	chicken := new(Chicken)
+	_ = json.Unmarshal(chickenAsBytes, chicken)
+
+	if chicken.Owner == owner {
+		return chicken, nil
+	}
+
+	return nil, fmt.Errorf("Permission denied.")
+
 }
 
 func (s *SmartContract) QueryToken(ctx contractapi.TransactionContextInterface, user string) (*Token, error) {
@@ -303,7 +318,7 @@ func (s *SmartContract) QueryPublicChickens(ctx contractapi.TransactionContextIn
 		chicken := new(Chicken)
 		_ = json.Unmarshal(queryResponse.Value, chicken)
 
-		if chicken.PublicToSell == true {
+		if chicken.ForSale == true {
 			queryResult := QueryResult{Key: queryResponse.Key, Record: chicken}
 			results = append(results, queryResult)
 		}
@@ -430,7 +445,7 @@ func (s *SmartContract) SetPublicToSell(ctx contractapi.TransactionContextInterf
 	}
 
 	if chicken.Owner == owner {
-		chicken.PublicToSell = true
+		chicken.ForSale = true
 	}
 
 	chickenAsBytes, _ := json.Marshal(chicken)
@@ -448,14 +463,8 @@ func (s *SmartContract) SetPublicToSell(ctx contractapi.TransactionContextInterf
 
 }
 
-func (s *SmartContract) BidForAsset(ctx contractapi.TransactionContextInterface, assetId string, customer string, assetOwner string, price float64) (*Token, error) {
+func (s *SmartContract) BlockingToken(ctx contractapi.TransactionContextInterface, customer string, price float64) (*Token, error) {
 	token, err := s.QueryToken(ctx, customer)
-
-	if err != nil {
-		return nil, err
-	}
-
-	chicken, err := s.QueryChicken(ctx, assetId)
 
 	if err != nil {
 		return nil, err
@@ -470,14 +479,6 @@ func (s *SmartContract) BidForAsset(ctx contractapi.TransactionContextInterface,
 			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
 		}
 
-		chicken.Bids[assetId+"#"+customer] = BidModel{AssetId: assetId, Customer: customer, Price: price}
-
-		chickenAsBytes, _ := json.Marshal(chicken)
-		_err_ := ctx.GetStub().PutState(assetId, chickenAsBytes)
-		if _err_ != nil {
-			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
-		}
-
 		return token, nil
 	} else {
 		return nil, fmt.Errorf("Insufficient balance. %s", err.Error())
@@ -485,39 +486,13 @@ func (s *SmartContract) BidForAsset(ctx contractapi.TransactionContextInterface,
 
 }
 
-func (s *SmartContract) GetBidsOfAsset(ctx contractapi.TransactionContextInterface, assetId string, assetOwner string) ([]BidModel, error) {
-
-	chicken, err := s.QueryChicken(ctx, assetId)
-	if err != nil {
-		return nil, err
-	}
-
-	bids := chicken.Bids
-
-	results := []BidModel{}
-
-	for _, value := range bids {
-		owner := chicken.Owner
-		if owner == assetOwner {
-			results = append(results, value)
-		}
-	}
-
-	return results, nil
-
-}
-
-func (s *SmartContract) SellChicken(ctx contractapi.TransactionContextInterface, id string, owner string, customer string) (*Chicken, error) {
+func (s *SmartContract) SellChicken(ctx contractapi.TransactionContextInterface, id string, owner string, customer string, price float64, biders string, bids string) (*Chicken, error) {
 
 	chicken, err := s.QueryChicken(ctx, id)
 
 	if err != nil {
 		return nil, err
 	}
-
-	bids := chicken.Bids
-	bid := bids[id+"#"+customer]
-	price := bid.Price
 
 	customer_token, err := s.QueryToken(ctx, customer)
 
@@ -546,32 +521,30 @@ func (s *SmartContract) SellChicken(ctx contractapi.TransactionContextInterface,
 			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
 		}
 		chicken.Owner = customer
-		chicken.PublicToSell = false
+		chicken.ForSale = false
 
-		for _, value := range bids {
-
-			if value.Customer == customer {
-				//nothings
-			} else {
-				token, err := s.QueryToken(ctx, value.Customer)
-				token.BlockAmount = token.BlockAmount - price
-				token.Amount = token.Amount + price
-				tokenAsBytes, _ := json.Marshal(token)
-				_err := ctx.GetStub().PutState(value.Customer, tokenAsBytes)
-				if _err != nil {
-					return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
-				}
-
-			}
-			delete(bids, value.AssetId+"#"+value.Customer)
-
-		}
-
-		chicken.Bids = bids
 		chickenAsBytes, _ := json.Marshal(chicken)
 		_err := ctx.GetStub().PutState(id, chickenAsBytes)
 		if _err != nil {
 			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
+		}
+
+		bidersArr := strings.Split(biders, "#")
+		bidsArr := strings.Split(bids, "#")
+
+		for i := 0; i < len(bidersArr); i++ {
+
+			bid, _ := strconv.ParseFloat(bidsArr[i], 8)
+
+			token, err := s.QueryToken(ctx, bidersArr[i])
+			token.BlockAmount = token.BlockAmount - bid
+			token.Amount = token.Amount + bid
+			tokenAsBytes, _ := json.Marshal(token)
+			_err := ctx.GetStub().PutState(bidersArr[i], tokenAsBytes)
+			if _err != nil {
+				return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
+			}
+
 		}
 
 		_chicken := new(Chicken)
