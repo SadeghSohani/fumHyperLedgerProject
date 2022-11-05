@@ -71,6 +71,199 @@ const createChicken = async (channelName, chaincodeName, username, org_name, id,
     }
 }
 
+const createBulkChicken = async (channelName, chaincodeName, username, org_name, ids, birthday, breed, price, owner) => {
+    try {
+        logger.debug(util.format('\n============ invoke transaction on channel %s ============\n', channelName));
+
+        const ccp = await helper.getCCP(org_name) 
+
+        // Create a new file system based wallet for managing identities.
+        const walletPath = await helper.getWalletPath(org_name) //path.join(process.cwd(), 'wallet');
+        const wallet = await Wallets.newFileSystemWallet(walletPath);
+        console.log(`Wallet path: ${walletPath}`);
+
+        // Check to see if we've already enrolled the user.
+        let identity = await wallet.get(username);
+        if (!identity) {
+            console.log(`An identity for the user ${username} does not exist in the wallet, so registering user`);
+            await helper.getRegisteredUser(username, org_name, true)
+            identity = await wallet.get(username);
+            console.log('Run the registerUser.js application before retrying');
+            return;
+        }
+
+        const connectOptions = {
+            wallet, identity: username, discovery: { enabled: true, asLocalhost: true },
+            eventHandlerOptions: {
+                commitTimeout: 100,
+                strategy: DefaultEventHandlerStrategies.NETWORK_SCOPE_ALLFORTX
+            }
+        }
+
+        // Create a new gateway for connecting to our peer node.
+        const gateway = new Gateway();
+        await gateway.connect(ccp, connectOptions);
+
+        // Get the network (channel) our contract is deployed to.
+        const network = await gateway.getNetwork(channelName);
+
+        const contract = network.getContract(chaincodeName);
+
+        let result
+        let message;
+        result = await contract.submitTransaction("createBulkChicken", ids, birthday, breed, price, owner);
+        
+        message = `Successfully added the chicken asset with keys ${ids}`
+
+        await gateway.disconnect();
+
+        result = JSON.parse(result.toString());
+
+        let response = {
+            message: message,
+            result
+        }
+
+        return response;
+
+
+    } catch (error) {
+
+        console.log(`Getting error: ${error}`)
+        return error.message
+
+    }
+}
+
+
+const createBulkChickenInBatch = async (channelName, chaincodeName, username, org_name, ids, birthday, breed, price, owner, batchId, batchName, batchTag, batchType) => {
+    try {
+        logger.debug(util.format('\n============ invoke transaction on channel %s ============\n', channelName));
+
+        const ccp = await helper.getCCP(org_name) 
+
+        // Create a new file system based wallet for managing identities.
+        const walletPath = await helper.getWalletPath(org_name) //path.join(process.cwd(), 'wallet');
+        const wallet = await Wallets.newFileSystemWallet(walletPath);
+        console.log(`Wallet path: ${walletPath}`);
+
+        // Check to see if we've already enrolled the user.
+        let identity = await wallet.get(username);
+        if (!identity) {
+            console.log(`An identity for the user ${username} does not exist in the wallet, so registering user`);
+            await helper.getRegisteredUser(username, org_name, true)
+            identity = await wallet.get(username);
+            console.log('Run the registerUser.js application before retrying');
+            return;
+        }
+
+        const connectOptions = {
+            wallet, identity: username, discovery: { enabled: true, asLocalhost: true },
+            eventHandlerOptions: {
+                commitTimeout: 100,
+                strategy: DefaultEventHandlerStrategies.NETWORK_SCOPE_ALLFORTX
+            }
+        }
+
+        // Create a new gateway for connecting to our peer node.
+        const gateway = new Gateway();
+        await gateway.connect(ccp, connectOptions);
+
+        // Get the network (channel) our contract is deployed to.
+        const network = await gateway.getNetwork(channelName);
+
+        const contract = network.getContract(chaincodeName);
+
+        let result
+        let message;
+        result = await contract.submitTransaction("createBulkChickenInBatch", ids, birthday, breed, price, owner, batchId, batchName, batchTag, batchType);
+        
+        message = `Successfully added the batch asset with key ${batchId}`
+
+        await gateway.disconnect();
+
+        result = JSON.parse(result.toString());
+
+        let response = {
+            message: message,
+            result
+        }
+
+        return response;
+
+
+    } catch (error) {
+
+        console.log(`Getting error: ${error}`)
+        return error.message
+
+    }
+}
+
+const createBatch = async (channelName, chaincodeName, username, org_name, id, name, tag, batchType, owner) => {
+    try {
+        logger.debug(util.format('\n============ invoke transaction on channel %s ============\n', channelName));
+
+        const ccp = await helper.getCCP(org_name) 
+
+        // Create a new file system based wallet for managing identities.
+        const walletPath = await helper.getWalletPath(org_name) //path.join(process.cwd(), 'wallet');
+        const wallet = await Wallets.newFileSystemWallet(walletPath);
+        console.log(`Wallet path: ${walletPath}`);
+
+        // Check to see if we've already enrolled the user.
+        let identity = await wallet.get(username);
+        if (!identity) {
+            console.log(`An identity for the user ${username} does not exist in the wallet, so registering user`);
+            await helper.getRegisteredUser(username, org_name, true)
+            identity = await wallet.get(username);
+            console.log('Run the registerUser.js application before retrying');
+            return;
+        }
+
+        const connectOptions = {
+            wallet, identity: username, discovery: { enabled: true, asLocalhost: true },
+            eventHandlerOptions: {
+                commitTimeout: 100,
+                strategy: DefaultEventHandlerStrategies.NETWORK_SCOPE_ALLFORTX
+            }
+        }
+
+        // Create a new gateway for connecting to our peer node.
+        const gateway = new Gateway();
+        await gateway.connect(ccp, connectOptions);
+
+        // Get the network (channel) our contract is deployed to.
+        const network = await gateway.getNetwork(channelName);
+
+        const contract = network.getContract(chaincodeName);
+
+        let result
+        let message;
+        result = await contract.submitTransaction("createBatch", id, name, tag, batchType, owner);
+        
+        message = `Successfully added the chicken asset with key ${id}`
+
+        await gateway.disconnect();
+
+        result = JSON.parse(result.toString());
+
+        let response = {
+            message: message,
+            result
+        }
+
+        return response;
+
+
+    } catch (error) {
+
+        console.log(`Getting error: ${error}`)
+        return error.message
+
+    }
+}
+
 const changeChickenOwner = async (channelName, chaincodeName, username, org_name, chickenId, owner, newOwner) => {
     try {
         logger.debug(util.format('\n============ invoke transaction on channel %s ============\n', channelName));
@@ -114,6 +307,134 @@ const changeChickenOwner = async (channelName, chaincodeName, username, org_name
 
         result = await contract.submitTransaction("changeChickenOwner", chickenId, owner, newOwner);
         message = `Successfully changed chicken owner with key ${chickenId}`
+
+        await gateway.disconnect();
+
+        result = JSON.parse(result.toString());
+
+        let response = {
+            message: message,
+            result
+        }
+
+        return response;
+
+
+    } catch (error) {
+
+        console.log(`Getting error: ${error}`)
+        return error.message
+
+    }
+}
+
+const changeChickenOwnerPhone = async (channelName, chaincodeName, username, org_name, chickenId, owner, newOwner) => {
+    try {
+        logger.debug(util.format('\n============ invoke transaction on channel %s ============\n', channelName));
+
+        const ccp = await helper.getCCP(org_name) 
+
+        // Create a new file system based wallet for managing identities.
+        const walletPath = await helper.getWalletPath(org_name) //path.join(process.cwd(), 'wallet');
+        const wallet = await Wallets.newFileSystemWallet(walletPath);
+        console.log(`Wallet path: ${walletPath}`);
+
+        // Check to see if we've already enrolled the user.
+        let identity = await wallet.get(username);
+        if (!identity) {
+            console.log(`An identity for the user ${username} does not exist in the wallet, so registering user`);
+            await helper.getRegisteredUser(username, org_name, true)
+            identity = await wallet.get(username);
+            console.log('Run the registerUser.js application before retrying');
+            return;
+        }
+
+        const connectOptions = {
+            wallet, identity: username, discovery: { enabled: true, asLocalhost: true },
+            eventHandlerOptions: {
+                commitTimeout: 100,
+                strategy: DefaultEventHandlerStrategies.NETWORK_SCOPE_ALLFORTX
+            }
+        }
+
+        // Create a new gateway for connecting to our peer node.
+        const gateway = new Gateway();
+        await gateway.connect(ccp, connectOptions);
+
+        // Get the network (channel) our contract is deployed to.
+        const network = await gateway.getNetwork(channelName);
+
+        const contract = network.getContract(chaincodeName);
+
+        let result
+        let message;
+
+        result = await contract.submitTransaction("changeChickenOwnerPhone", chickenId, owner, newOwner);
+        message = `Successfully changed chicken owner with key ${chickenId}`
+
+        await gateway.disconnect();
+
+        result = JSON.parse(result.toString());
+
+        let response = {
+            message: message,
+            result
+        }
+
+        return response;
+
+
+    } catch (error) {
+
+        console.log(`Getting error: ${error}`)
+        return error.message
+
+    }
+}
+
+const changeChickenStatus = async (channelName, chaincodeName, username, org_name, chickenId, owner, status) => {
+    try {
+        logger.debug(util.format('\n============ invoke transaction on channel %s ============\n', channelName));
+
+        const ccp = await helper.getCCP(org_name) 
+
+        // Create a new file system based wallet for managing identities.
+        const walletPath = await helper.getWalletPath(org_name) //path.join(process.cwd(), 'wallet');
+        const wallet = await Wallets.newFileSystemWallet(walletPath);
+        console.log(`Wallet path: ${walletPath}`);
+
+        // Check to see if we've already enrolled the user.
+        let identity = await wallet.get(username);
+        if (!identity) {
+            console.log(`An identity for the user ${username} does not exist in the wallet, so registering user`);
+            await helper.getRegisteredUser(username, org_name, true)
+            identity = await wallet.get(username);
+            console.log('Run the registerUser.js application before retrying');
+            return;
+        }
+
+        const connectOptions = {
+            wallet, identity: username, discovery: { enabled: true, asLocalhost: true },
+            eventHandlerOptions: {
+                commitTimeout: 100,
+                strategy: DefaultEventHandlerStrategies.NETWORK_SCOPE_ALLFORTX
+            }
+        }
+
+        // Create a new gateway for connecting to our peer node.
+        const gateway = new Gateway();
+        await gateway.connect(ccp, connectOptions);
+
+        // Get the network (channel) our contract is deployed to.
+        const network = await gateway.getNetwork(channelName);
+
+        const contract = network.getContract(chaincodeName);
+
+        let result
+        let message;
+
+        result = await contract.submitTransaction("ChangeChickenStatus", chickenId, owner, status);
+        message = `Successfully changed chicken status with key ${chickenId}`
 
         await gateway.disconnect();
 
@@ -241,6 +562,70 @@ const setChickenPublicForSale = async (channelName, chaincodeName, username, org
         let message;
 
         result = await contract.submitTransaction("setPublicToSell", chickenId, owner);
+        message = `Transaction successful.`
+
+        await gateway.disconnect();
+
+        result = JSON.parse(result.toString());
+
+        let response = {
+            message: message,
+            result
+        }
+
+        return response;
+
+
+    } catch (error) {
+
+        console.log(`Getting error: ${error}`)
+        return error.message
+
+    }
+}
+
+const setBatchPublicForSale = async (channelName, chaincodeName, username, org_name, batchId, owner) => {
+    try {
+        logger.debug(util.format('\n============ invoke transaction on channel %s ============\n', channelName));
+
+        const ccp = await helper.getCCP(org_name) 
+
+        // Create a new file system based wallet for managing identities.
+        const walletPath = await helper.getWalletPath(org_name) //path.join(process.cwd(), 'wallet');
+        const wallet = await Wallets.newFileSystemWallet(walletPath);
+        console.log(`Wallet path: ${walletPath}`);
+
+        // Check to see if we've already enrolled the user.
+        let identity = await wallet.get(username);
+        if (!identity) {
+            console.log(`An identity for the user ${username} does not exist in the wallet, so registering user`);
+            await helper.getRegisteredUser(username, org_name, true)
+            identity = await wallet.get(username);
+            console.log('Run the registerUser.js application before retrying');
+            return;
+        }
+
+        const connectOptions = {
+            wallet, identity: username, discovery: { enabled: true, asLocalhost: true },
+            eventHandlerOptions: {
+                commitTimeout: 100,
+                strategy: DefaultEventHandlerStrategies.NETWORK_SCOPE_ALLFORTX
+            }
+        }
+
+        // Create a new gateway for connecting to our peer node.
+        const gateway = new Gateway();
+        await gateway.connect(ccp, connectOptions);
+
+        // Get the network (channel) our contract is deployed to.
+        const network = await gateway.getNetwork(channelName);
+
+        const contract = network.getContract(chaincodeName);
+
+        let result
+        let message;
+
+        result = await contract.submitTransaction("SetBatchPublicToSell", batchId, owner);
         message = `Transaction successful.`
 
         await gateway.disconnect();
@@ -466,6 +851,216 @@ const sellChicken = async (channelName, chaincodeName, username, org_name, id, o
     }
 }
 
+const sellBatch = async (channelName, chaincodeName, username, org_name, id, owner, customer, price, biders, bids) => {
+    try {
+        
+        logger.debug(util.format('\n============ invoke transaction on channel %s ============\n', channelName));
+        
+        const ccp = await helper.getCCP(org_name) 
+
+        // Create a new file system based wallet for managing identities.
+        const walletPath = await helper.getWalletPath(org_name) //path.join(process.cwd(), 'wallet');
+        const wallet = await Wallets.newFileSystemWallet(walletPath);
+        console.log(`Wallet path: ${walletPath}`);
+
+        // Check to see if we've already enrolled the user.
+        let identity = await wallet.get(username);
+        if (!identity) {
+            console.log(`An identity for the user ${username} does not exist in the wallet, so registering user`);
+            await helper.getRegisteredUser(username, org_name, true)
+            identity = await wallet.get(username);
+            console.log('Run the registerUser.js application before retrying');
+            return;
+        }
+
+        const connectOptions = {
+            wallet, identity: username, discovery: { enabled: true, asLocalhost: true },
+            eventHandlerOptions: {
+                commitTimeout: 100,
+                strategy: DefaultEventHandlerStrategies.NETWORK_SCOPE_ALLFORTX
+            }
+        }
+
+        // Create a new gateway for connecting to our peer node.
+        const gateway = new Gateway();
+        await gateway.connect(ccp, connectOptions);
+
+        // Get the network (channel) our contract is deployed to.
+        const network = await gateway.getNetwork(channelName);
+
+        const contract = network.getContract(chaincodeName);
+
+        let result
+        let message;       
+
+        result = await contract.submitTransaction("sellBatch", id, owner, customer, price, biders, bids);
+        message = `Transaction successful.`
+
+        await gateway.disconnect();
+
+        result = JSON.parse(result.toString());
+
+        let response = {
+            staus: 200,
+            message: message,
+            result
+        }
+
+        return response;
+
+
+    } catch (error) {
+
+        let response = {
+            staus: 400,
+            message: error.message
+        }
+
+        return response;
+        
+    }
+}
+
+const putAssetsInBatch = async (channelName, chaincodeName, username, org_name, assetsIds, owner, batchId) => {
+    try {
+        
+        logger.debug(util.format('\n============ invoke transaction on channel %s ============\n', channelName));
+        
+        const ccp = await helper.getCCP(org_name) 
+
+        // Create a new file system based wallet for managing identities.
+        const walletPath = await helper.getWalletPath(org_name) //path.join(process.cwd(), 'wallet');
+        const wallet = await Wallets.newFileSystemWallet(walletPath);
+        console.log(`Wallet path: ${walletPath}`);
+
+        // Check to see if we've already enrolled the user.
+        let identity = await wallet.get(username);
+        if (!identity) {
+            console.log(`An identity for the user ${username} does not exist in the wallet, so registering user`);
+            await helper.getRegisteredUser(username, org_name, true)
+            identity = await wallet.get(username);
+            console.log('Run the registerUser.js application before retrying');
+            return;
+        }
+
+        const connectOptions = {
+            wallet, identity: username, discovery: { enabled: true, asLocalhost: true },
+            eventHandlerOptions: {
+                commitTimeout: 100,
+                strategy: DefaultEventHandlerStrategies.NETWORK_SCOPE_ALLFORTX
+            }
+        }
+
+        // Create a new gateway for connecting to our peer node.
+        const gateway = new Gateway();
+        await gateway.connect(ccp, connectOptions);
+
+        // Get the network (channel) our contract is deployed to.
+        const network = await gateway.getNetwork(channelName);
+
+        const contract = network.getContract(chaincodeName);
+
+        let result
+        let message;       
+
+        result = await contract.submitTransaction("putAssetsInBatch", assetsIds, owner, batchId);
+        message = `Transaction successful.`
+
+        await gateway.disconnect();
+
+        result = JSON.parse(result.toString());
+
+        let response = {
+            staus: 200,
+            message: message,
+            result
+        }
+
+        return response;
+
+
+    } catch (error) {
+
+        let response = {
+            staus: 400,
+            message: error.message
+        }
+
+        return response;
+        
+    }
+}
+
+const removeAssetsFromBatch = async (channelName, chaincodeName, username, org_name, assetsIds, owner, batchId) => {
+    try {
+        
+        logger.debug(util.format('\n============ invoke transaction on channel %s ============\n', channelName));
+        
+        const ccp = await helper.getCCP(org_name) 
+
+        // Create a new file system based wallet for managing identities.
+        const walletPath = await helper.getWalletPath(org_name) //path.join(process.cwd(), 'wallet');
+        const wallet = await Wallets.newFileSystemWallet(walletPath);
+        console.log(`Wallet path: ${walletPath}`);
+
+        // Check to see if we've already enrolled the user.
+        let identity = await wallet.get(username);
+        if (!identity) {
+            console.log(`An identity for the user ${username} does not exist in the wallet, so registering user`);
+            await helper.getRegisteredUser(username, org_name, true)
+            identity = await wallet.get(username);
+            console.log('Run the registerUser.js application before retrying');
+            return;
+        }
+
+        const connectOptions = {
+            wallet, identity: username, discovery: { enabled: true, asLocalhost: true },
+            eventHandlerOptions: {
+                commitTimeout: 100,
+                strategy: DefaultEventHandlerStrategies.NETWORK_SCOPE_ALLFORTX
+            }
+        }
+
+        // Create a new gateway for connecting to our peer node.
+        const gateway = new Gateway();
+        await gateway.connect(ccp, connectOptions);
+
+        // Get the network (channel) our contract is deployed to.
+        const network = await gateway.getNetwork(channelName);
+
+        const contract = network.getContract(chaincodeName);
+
+        let result
+        let message;       
+
+        result = await contract.submitTransaction("removeAssetsFromBatch", assetsIds, owner, batchId);
+        message = `Transaction successful.`
+
+        await gateway.disconnect();
+
+        result = JSON.parse(result.toString());
+
+        let response = {
+            staus: 200,
+            message: message,
+            result
+        }
+
+        return response;
+
+
+    } catch (error) {
+
+        let response = {
+            staus: 400,
+            message: error.message
+        }
+
+        return response;
+        
+    }
+}
+
 const setChickenPrice = async (channelName, chaincodeName, username, org_name, id, price) => {
     try {
         
@@ -597,11 +1192,20 @@ const putGrowthInformation = async (channelName, chaincodeName, username, org_na
 }
 
 exports.changeChickenOwner = changeChickenOwner;
+exports.changeChickenStatus = changeChickenStatus;
+exports.createBatch = createBatch;
 exports.createChicken = createChicken;
+exports.createBulkChicken = createBulkChicken;
 exports.buyToken = buyToken;
 exports.setChickenPublicForSale = setChickenPublicForSale;
 exports.transferToken = transferToken;
 exports.blockingToken = blockingToken;
 exports.sellChicken = sellChicken;
+exports.sellBatch = sellBatch;
 exports.setChickenPrice = setChickenPrice;
 exports.putGrowthInformation = putGrowthInformation;
+exports.putAssetsInBatch = putAssetsInBatch;
+exports.setBatchPublicForSale = setBatchPublicForSale;
+exports.removeAssetsFromBatch = removeAssetsFromBatch;
+exports.changeChickenOwnerPhone = changeChickenOwnerPhone;
+exports.createBulkChickenInBatch = createBulkChickenInBatch;
