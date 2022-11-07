@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
 )
 
@@ -14,39 +13,31 @@ type SmartContract struct {
 	contractapi.Contract
 }
 
-type GrowthInformation struct {
+type Metadata struct {
 	Key         string `json:"key"`
 	Value       string `json:"value"`
 	Instruction string `json:"instruction"`
 }
 
-type Chicken struct {
+type Asset struct {
+	Id        string            `json:"id"`
+	Nickname  string            `json:"nickname"`
 	Type      string            `json:"type"`
-	Birthday  string            `json:"birthday"`
-	Breed     string            `json:"breed"`
+	Tag       string            `json:"tag"`
+	Status    string            `json:"status"`
 	Price     float64           `json:"price"`
 	Owner     string            `json:"owner"`
-	GrowthInf GrowthInformation `json:"growthInformation"`
+	Metadata  []Metadata        `json:"metadata"`
 	ForSale   bool              `json:"forSale"`
-	TxType      string            `json:"txType"`
-	Status      string            `json:"status"`
-}
-
-type QueryResult struct {
-	Key    string `json:"id"`
-	Record *Chicken `json:"asset"`
-}
-
-type BatchResult struct {
-	Id    string `json:"id"`
-	Asset *Batch `json:"asset"`
+	TxType    string            `json:"txType"`
+	ChildesCount int          `json:"childesCount"`
 }
 
 type HistoryModel struct {
-	TxId      string `json:"TxId"`
-	Value     *Chicken
-	Timestamp string `json:"Timestamp"`
-	IsDelete  bool   `json:"IsDelete"`
+	TxId      string   `json:"txId"`
+	Asset     *Asset `json:"asset"`
+	Timestamp string   `json:"timestamp"`
+	IsDelete  bool     `json:"isDelete"`
 }
 
 type Token struct {
@@ -56,15 +47,6 @@ type Token struct {
 	BlockAmount float64 `json:"blockAmount"`
 }
 
-type Batch struct {
-	Name      string            `json:"name"`
-	Tag       string            `json:"tag"`
-	Type      string            `json:"type"`
-	Count     int64             `json:"count"`
-	Owner     string            `json:"owner"`
-	ForSale   bool              `json:"forSale"`
-	TxType      string            `json:"txType"`
-}
 
 func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
 
@@ -100,65 +82,64 @@ func (s *SmartContract) InitLedger(ctx contractapi.TransactionContextInterface) 
 	return nil
 }
 
-func (s *SmartContract) CreateChicken(ctx contractapi.TransactionContextInterface, id string, birthday string, breed string, price float64, owner string) (*Chicken, error) {
+func (s *SmartContract) CreateAsset(ctx contractapi.TransactionContextInterface,
+	id string, nickname string, assetType string, tag string,
+	status string, price float64, owner string) (*Asset, error) {
 
-	gi := GrowthInformation{
-		Key:         "",
-		Value:       "",
-		Instruction: "",
-	}
-	chicken := Chicken{Type: "Chicken", Birthday: birthday, Breed: breed, Price: price, Owner: owner, GrowthInf: gi, ForSale: false, TxType: "CreateChicken", Status:"Alive"}
 
-	chickenAsBytes, _ := json.Marshal(chicken)
-	err := ctx.GetStub().PutState(id, chickenAsBytes)
+	mt := []Metadata{}
+	
+	asset := Asset{Id: id, Nickname: nickname , Type: assetType, Tag: tag, Status: status, Price: price, Owner: owner, Metadata: mt, ForSale: false, TxType: "CreateAsset", ChildesCount: 0}
+
+	assetAsBytes, _ := json.Marshal(asset)
+	err := ctx.GetStub().PutState(id, assetAsBytes)
 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
 	}
 
-	_chicken := new(Chicken)
-	_ = json.Unmarshal(chickenAsBytes, _chicken)
+	// _asset := new(Asset)
+	// _ = json.Unmarshal(assetAsBytes, _asset)
 
-	return _chicken, nil
+	return &asset, nil
 }
 
-func (s *SmartContract) CreateBulkChicken(ctx contractapi.TransactionContextInterface, assetsIds string, birthday string, breed string, price float64, owner string) ([]Chicken, error) {
+
+func (s *SmartContract) CreateBulkAssets(ctx contractapi.TransactionContextInterface, 
+	assetsIds string, nickname string, assetType string, tag string,
+	status string, price float64, owner string) ([]Asset, error) {
 
 	ids := strings.Split(assetsIds, "#")
 
-	gi := GrowthInformation{
-		Key:         "",
-		Value:       "",
-		Instruction: "",
-	}
-
-	chickens := []Chicken{}
+	mt := []Metadata{}
+	
+	result := []Asset{}
 
 	for i := range ids {
-		chicken := Chicken{Type: "Chicken", Birthday: birthday, Breed: breed, Price: price, Owner: owner, GrowthInf: gi, ForSale: false, TxType: "CreateChicken", Status:"Alive"}
-		chickenAsBytes, _ := json.Marshal(chicken)
-		err := ctx.GetStub().PutState(ids[i], chickenAsBytes)
+		asset := Asset{Id: ids[i], Nickname: nickname , Type: assetType, Tag: tag, Status: status, Price: price, Owner: owner, Metadata: mt, ForSale: false, TxType: "CreateAsset", ChildesCount: 0}
+		assetAsBytes, _ := json.Marshal(asset)
+		err := ctx.GetStub().PutState(ids[i], assetAsBytes)
 	
 		if err != nil {
 			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
 		}
-		chickens = append(chickens, chicken)
+
+		result = append(result, asset)
 
 	}
 
-	// _chicken := new(Chicken)
-	// _ = json.Unmarshal(chickenAsBytes, _chicken)
 
-	return chickens, nil
+	return result, nil
 }
 
-func (s *SmartContract) CreateBulkChickenInBatch(ctx contractapi.TransactionContextInterface,
-	 assetsIds string, birthday string, breed string, price float64, owner string,
-	 batchId string, batchName string, batchTag string, batchType string) (*Batch, error) {
+func (s *SmartContract) CreateBulkAssetsInBatch(ctx contractapi.TransactionContextInterface,
+	 assetsIds string, nickname string, assetType string, tag string,
+	 status string, price float64, owner string, batchId string) (*Asset, error) {
 
 	ids := strings.Split(assetsIds, "#")
 
-	batch := Batch{Name: batchName, Tag: batchTag, Type: batchType, Count: int64(len(ids)), Owner: owner, ForSale:false, TxType: "CreateBatch"}
+	mt := []Metadata{}
+	batch := Asset{Id: batchId, Nickname: "" , Type: "BATCH", Tag: tag, Status: "", Price: 0.0, Owner: owner, Metadata: mt, ForSale: false, TxType: "CreateBatch", ChildesCount: len(ids)}
 
 	batchAsBytes, _ := json.Marshal(batch)
 	err := ctx.GetStub().PutState(batchId, batchAsBytes)
@@ -167,119 +148,59 @@ func (s *SmartContract) CreateBulkChickenInBatch(ctx contractapi.TransactionCont
 		return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
 	}
 
-	gi := GrowthInformation{
-		Key:         "",
-		Value:       "",
-		Instruction: "",
-	}
 
 	for i := range ids {
-		chicken := Chicken{Type: "Chicken", Birthday: birthday, Breed: breed, Price: price, Owner: batchId, GrowthInf: gi, ForSale: false, TxType: "CreateChicken", Status:"Alive"}
-		chickenAsBytes, _ := json.Marshal(chicken)
-		err := ctx.GetStub().PutState(ids[i], chickenAsBytes)
+		asset := Asset{Id: ids[i], Nickname: nickname , Type: assetType, Tag: tag, Status: status, Price: price, Owner: owner, Metadata: mt, ForSale: false, TxType: "CreateAsset", ChildesCount: 0}
+		assetAsBytes, _ := json.Marshal(asset)
+		err := ctx.GetStub().PutState(ids[i], assetAsBytes)
 	
 		if err != nil {
 			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
 		}
+	
 
 	}
 
-	_batch := new(Batch)
-	_ = json.Unmarshal(batchAsBytes, _batch)
 
-	return _batch, nil
+	// _asset := new(Asset)
+	// _ = json.Unmarshal(batchAsBytes, _asset)
+
+	return &batch, nil
 }
 
-func (s *SmartContract) CreateBatch(ctx contractapi.TransactionContextInterface,
-	 id string, name string, tag string, batchType string, owner string) (*Batch, error) {
-
-	batch := Batch{Name: name, Tag: tag, Type: batchType, Count: 0, Owner: owner, ForSale:false, TxType: "CreateBatch"}
-
-	batchAsBytes, _ := json.Marshal(batch)
-	err := ctx.GetStub().PutState(id, batchAsBytes)
-
-	if err != nil {
-		return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
-	}
-
-	_batch := new(Batch)
-	_ = json.Unmarshal(batchAsBytes, _batch)
-
-	return _batch, nil
-}
-
-func (s *SmartContract) QueryChicken(ctx contractapi.TransactionContextInterface, id string) (*Chicken, error) {
-	chickenAsBytes, err := ctx.GetStub().GetState(id)
+func (s *SmartContract) QueryAsset(ctx contractapi.TransactionContextInterface, id string) (*Asset, error) {
+	assetAsBytes, err := ctx.GetStub().GetState(id)
 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
 	}
 
-	if chickenAsBytes == nil {
+	if assetAsBytes == nil {
 		return nil, fmt.Errorf("%s does not exist", id)
 	}
 
-	chicken := new(Chicken)
-	_ = json.Unmarshal(chickenAsBytes, chicken)
+	asset := new(Asset)
+	_ = json.Unmarshal(assetAsBytes, asset)
 
-	return chicken, nil
+	return asset, nil
 }
 
-func (s *SmartContract) QueryBatch(ctx contractapi.TransactionContextInterface, id string) (*Batch, error) {
-	batchAsBytes, err := ctx.GetStub().GetState(id)
+func (s *SmartContract) QueryAssetByOwner(ctx contractapi.TransactionContextInterface, id string, owner string) (*Asset, error) {
+	assetAsBytes, err := ctx.GetStub().GetState(id)
 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
 	}
 
-	if batchAsBytes == nil {
+	if assetAsBytes == nil {
 		return nil, fmt.Errorf("%s does not exist", id)
 	}
 
-	batch := new(Batch)
-	_ = json.Unmarshal(batchAsBytes, batch)
+	asset := new(Asset)
+	_ = json.Unmarshal(assetAsBytes, asset)
 
-	return batch, nil
-}
-
-func (s *SmartContract) QueryChickenByOwner(ctx contractapi.TransactionContextInterface, id string, owner string) (*Chicken, error) {
-	chickenAsBytes, err := ctx.GetStub().GetState(id)
-
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
-	}
-
-	if chickenAsBytes == nil {
-		return nil, fmt.Errorf("%s does not exist", id)
-	}
-
-	chicken := new(Chicken)
-	_ = json.Unmarshal(chickenAsBytes, chicken)
-
-	if chicken.Owner == owner {
-		return chicken, nil
-	}
-
-	return nil, fmt.Errorf("Permission denied.")
-
-}
-
-func (s *SmartContract) QueryBatchByOwner(ctx contractapi.TransactionContextInterface, id string, owner string) (*Batch, error) {
-	batchAsBytes, err := ctx.GetStub().GetState(id)
-
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read from world state. %s", err.Error())
-	}
-
-	if batchAsBytes == nil {
-		return nil, fmt.Errorf("%s does not exist", id)
-	}
-
-	batch := new(Batch)
-	_ = json.Unmarshal(batchAsBytes, batch)
-
-	if batch.Owner == owner {
-		return batch, nil
+	if asset.Owner == owner {
+		return asset, nil
 	}
 
 	return nil, fmt.Errorf("Permission denied.")
@@ -370,7 +291,7 @@ func (s *SmartContract) TransferToken(ctx contractapi.TransactionContextInterfac
 	return sender_token, nil
 }
 
-func (s *SmartContract) QueryAllChickens(ctx contractapi.TransactionContextInterface) ([]QueryResult, error) {
+func (s *SmartContract) QueryAllAssets(ctx contractapi.TransactionContextInterface) ([]Asset, error) {
 	startKey := ""
 	endKey := ""
 
@@ -381,7 +302,7 @@ func (s *SmartContract) QueryAllChickens(ctx contractapi.TransactionContextInter
 	}
 	defer resultsIterator.Close()
 
-	results := []QueryResult{}
+	results := []Asset{}
 	for resultsIterator.HasNext() {
 		queryResponse, err := resultsIterator.Next()
 
@@ -389,20 +310,18 @@ func (s *SmartContract) QueryAllChickens(ctx contractapi.TransactionContextInter
 			return nil, err
 		}
 
-		chicken := new(Chicken)
-		_ = json.Unmarshal(queryResponse.Value, chicken)
+		asset := new(Asset)
+		_ = json.Unmarshal(queryResponse.Value, asset)
 
-		if chicken.Type == "Chicken" {
-			queryResult := QueryResult{Key: queryResponse.Key, Record: chicken}
-			results = append(results, queryResult)
-		}
+
+		results = append(results, *asset)
 
 	}
 
 	return results, nil
 }
 
-func (s *SmartContract) QueryChickensByOwner(ctx contractapi.TransactionContextInterface, owner string) ([]QueryResult, error) {
+func (s *SmartContract) QueryAssetsByOwner(ctx contractapi.TransactionContextInterface, owner string) ([]Asset, error) {
 
 	startKey := ""
 	endKey := ""
@@ -414,7 +333,7 @@ func (s *SmartContract) QueryChickensByOwner(ctx contractapi.TransactionContextI
 	}
 	defer resultsIterator.Close()
 
-	results := []QueryResult{}
+	results := []Asset{}
 
 	for resultsIterator.HasNext() {
 		queryResponse, err := resultsIterator.Next()
@@ -423,12 +342,11 @@ func (s *SmartContract) QueryChickensByOwner(ctx contractapi.TransactionContextI
 			return nil, err
 		}
 
-		chicken := new(Chicken)
-		_ = json.Unmarshal(queryResponse.Value, chicken)
+		asset := new(Asset)
+		_ = json.Unmarshal(queryResponse.Value, asset)
 
-		if chicken.Owner == owner && chicken.Breed != "" {
-			queryResult := QueryResult{Key: queryResponse.Key, Record: chicken}
-			results = append(results, queryResult)
+		if asset.Owner == owner {
+			results = append(results, *asset)
 		}
 
 	}
@@ -436,7 +354,7 @@ func (s *SmartContract) QueryChickensByOwner(ctx contractapi.TransactionContextI
 	return results, nil
 }
 
-func (s *SmartContract) GetAssetsOfBatch(ctx contractapi.TransactionContextInterface, batchId string, owner string) ([]QueryResult, error) {
+func (s *SmartContract) GetAssetsOfBatch(ctx contractapi.TransactionContextInterface, batchId string, owner string) ([]Asset, error) {
 
 	batchAsBytes, err := ctx.GetStub().GetState(batchId)
 
@@ -448,7 +366,7 @@ func (s *SmartContract) GetAssetsOfBatch(ctx contractapi.TransactionContextInter
 		return nil, fmt.Errorf("%s does not exist", batchId)
 	}
 
-	batch := new(Batch)
+	batch := new(Asset)
 	_ = json.Unmarshal(batchAsBytes, batch)
 
 	if batch.Owner == owner {
@@ -462,7 +380,7 @@ func (s *SmartContract) GetAssetsOfBatch(ctx contractapi.TransactionContextInter
 		}
 		defer resultsIterator.Close()
 	
-		results := []QueryResult{}
+		results := []Asset{}
 	
 		for resultsIterator.HasNext() {
 			queryResponse, err := resultsIterator.Next()
@@ -471,12 +389,11 @@ func (s *SmartContract) GetAssetsOfBatch(ctx contractapi.TransactionContextInter
 				return nil, err
 			}
 	
-			chicken := new(Chicken)
-			_ = json.Unmarshal(queryResponse.Value, chicken)
+			asset := new(Asset)
+			_ = json.Unmarshal(queryResponse.Value, asset)
 	
-			if chicken.Owner == batchId && chicken.Breed != "" {
-				queryResult := QueryResult{Key: queryResponse.Key, Record: chicken}
-				results = append(results, queryResult)
+			if asset.Owner == batchId {
+				results = append(results, *asset)
 			}
 	
 		}
@@ -487,7 +404,7 @@ func (s *SmartContract) GetAssetsOfBatch(ctx contractapi.TransactionContextInter
 
 }
 
-func (s *SmartContract) QueryAllBatchsByOwner(ctx contractapi.TransactionContextInterface, owner string) ([]BatchResult, error) {
+func (s *SmartContract) QueryPublicAssets(ctx contractapi.TransactionContextInterface) ([]Asset, error) {
 
 	startKey := ""
 	endKey := ""
@@ -499,7 +416,7 @@ func (s *SmartContract) QueryAllBatchsByOwner(ctx contractapi.TransactionContext
 	}
 	defer resultsIterator.Close()
 
-	results := []BatchResult{}
+	results := []Asset{}
 
 	for resultsIterator.HasNext() {
 		queryResponse, err := resultsIterator.Next()
@@ -508,12 +425,11 @@ func (s *SmartContract) QueryAllBatchsByOwner(ctx contractapi.TransactionContext
 			return nil, err
 		}
 
-		batch := new(Batch)
-		_ = json.Unmarshal(queryResponse.Value, batch)
+		asset := new(Asset)
+		_ = json.Unmarshal(queryResponse.Value, asset)
 
-		if batch.Owner == owner && batch.Name != "" {
-			queryResult := BatchResult{Id: queryResponse.Key, Asset: batch}
-			results = append(results, queryResult)
+		if asset.ForSale == true {
+			results = append(results, *asset)
 		}
 
 	}
@@ -521,174 +437,9 @@ func (s *SmartContract) QueryAllBatchsByOwner(ctx contractapi.TransactionContext
 	return results, nil
 }
 
-func (s *SmartContract) QueryPublicChickens(ctx contractapi.TransactionContextInterface) ([]QueryResult, error) {
+func (t *SmartContract) GetAssetHistory(ctx contractapi.TransactionContextInterface, id string) ([]HistoryModel, error) {
 
-	startKey := ""
-	endKey := ""
-
-	resultsIterator, err := ctx.GetStub().GetStateByRange(startKey, endKey)
-
-	if err != nil {
-		return nil, err
-	}
-	defer resultsIterator.Close()
-
-	results := []QueryResult{}
-
-	for resultsIterator.HasNext() {
-		queryResponse, err := resultsIterator.Next()
-
-		if err != nil {
-			return nil, err
-		}
-
-		chicken := new(Chicken)
-		_ = json.Unmarshal(queryResponse.Value, chicken)
-
-		if chicken.ForSale == true {
-			queryResult := QueryResult{Key: queryResponse.Key, Record: chicken}
-			results = append(results, queryResult)
-		}
-
-	}
-
-	return results, nil
-}
-
-func (s *SmartContract) PutGrowthInformation(ctx contractapi.TransactionContextInterface, id string, key string, value string, instruction string, owner string) (*Chicken, error) {
-	chicken, err := s.QueryChicken(ctx, id)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if chicken.Owner == owner {
-		chicken.GrowthInf = GrowthInformation{Key: key, Value: value, Instruction: instruction}
-		chicken.TxType = "PutGrowthInf"
-	}
-
-	chickenAsBytes, _ := json.Marshal(chicken)
-
-	_err := ctx.GetStub().PutState(id, chickenAsBytes)
-
-	if _err != nil {
-		return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
-	}
-
-	_chicken := new(Chicken)
-	_ = json.Unmarshal(chickenAsBytes, _chicken)
-	return _chicken, nil
-
-}
-
-func (s *SmartContract) ChangeChickenOwner(ctx contractapi.TransactionContextInterface, id string, owner string, newOwner string) (*Chicken, error) {
-	chicken, err := s.QueryChicken(ctx, id)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if chicken.Owner == owner {
-		chicken.Owner = newOwner
-		chicken.TxType = "ChangeOwner"
-	}
-
-	chickenAsBytes, _ := json.Marshal(chicken)
-
-	_err := ctx.GetStub().PutState(id, chickenAsBytes)
-
-	if _err != nil {
-		return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
-	}
-
-	_chicken := new(Chicken)
-	_ = json.Unmarshal(chickenAsBytes, _chicken)
-	return _chicken, nil
-
-}
-
-func (s *SmartContract) ChangeChickenOwnerPhone(ctx contractapi.TransactionContextInterface, id string, owner string, newOwner string) (*Chicken, error) {
-	chicken, err := s.QueryChicken(ctx, id)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if chicken.Status == "FinalProduct" {
-		chicken.Owner = newOwner
-		chicken.TxType = "ChangeOwner"
-	}
-
-	chickenAsBytes, _ := json.Marshal(chicken)
-
-	_err := ctx.GetStub().PutState(id, chickenAsBytes)
-
-	if _err != nil {
-		return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
-	}
-
-	_chicken := new(Chicken)
-	_ = json.Unmarshal(chickenAsBytes, _chicken)
-	return _chicken, nil
-
-}
-
-func (s *SmartContract) ChangeChickenStatus(ctx contractapi.TransactionContextInterface, id string, owner string, status string) (*Chicken, error) {
-	chicken, err := s.QueryChicken(ctx, id)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if chicken.Owner == owner{
-		chicken.Status = status
-		chicken.TxType = "ChangeStatus"
-	}
-
-	chickenAsBytes, _ := json.Marshal(chicken)
-
-	_err := ctx.GetStub().PutState(id, chickenAsBytes)
-
-	if _err != nil {
-		return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
-	}
-
-	_chicken := new(Chicken)
-	_ = json.Unmarshal(chickenAsBytes, _chicken)
-	return _chicken, nil
-
-}
-
-func (s *SmartContract) SetChickenPrice(ctx contractapi.TransactionContextInterface, id string, price float64, owner string) (*Chicken, error) {
-	chicken, err := s.QueryChicken(ctx, id)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if chicken.Owner == owner {
-		chicken.Price = price
-		chicken.TxType = "SetPrice"
-		chickenAsBytes, _ := json.Marshal(chicken)
-
-		_err := ctx.GetStub().PutState(id, chickenAsBytes)
-
-		if _err != nil {
-			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
-		}
-
-		_chicken := new(Chicken)
-		_ = json.Unmarshal(chickenAsBytes, _chicken)
-		return _chicken, nil
-	} else {
-		return nil, fmt.Errorf("You are not owner of this asset")
-	}
-
-}
-
-func (t *SmartContract) GetHistoryForAsset(ctx contractapi.TransactionContextInterface, chickenName string) ([]HistoryModel, error) {
-
-	resultsIterator, err := ctx.GetStub().GetHistoryForKey(chickenName)
+	resultsIterator, err := ctx.GetStub().GetHistoryForKey(id)
 	if err != nil {
 		return nil, err
 	}
@@ -704,12 +455,12 @@ func (t *SmartContract) GetHistoryForAsset(ctx contractapi.TransactionContextInt
 			return nil, err
 		}
 
-		chicken := new(Chicken)
-		_ = json.Unmarshal(queryResponse.Value, chicken)
+		asset := new(Asset)
+		_ = json.Unmarshal(queryResponse.Value, asset)
 
 		historyItem := HistoryModel{
 			TxId:      queryResponse.TxId,
-			Value:     chicken,
+			Asset:     asset,
 			Timestamp: time.Unix(queryResponse.Timestamp.Seconds, int64(queryResponse.Timestamp.Nanos)).String(),
 			IsDelete:  queryResponse.IsDelete}
 		results = append(results, historyItem)
@@ -719,57 +470,153 @@ func (t *SmartContract) GetHistoryForAsset(ctx contractapi.TransactionContextInt
 
 }
 
-func (s *SmartContract) SetPublicToSell(ctx contractapi.TransactionContextInterface, id string, owner string) (*Chicken, error) {
-	chicken, err := s.QueryChicken(ctx, id)
+func (s *SmartContract) PutMetadata(ctx contractapi.TransactionContextInterface, id string, key string, value string, instruction string, owner string) (*Asset, error) {
+	asset, err := s.QueryAsset(ctx, id)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if chicken.Owner == owner {
-		chicken.ForSale = true
-		chicken.TxType = "SetChickenPublic"
+	if asset.Owner == owner {
+		mt := asset.Metadata
+		mt = append(mt, Metadata{Key: key, Value: value, Instruction: instruction})
+		asset.Metadata = mt
+		asset.TxType = "PutMetadata"
 	}
 
-	chickenAsBytes, _ := json.Marshal(chicken)
+	assetAsBytes, _ := json.Marshal(asset)
 
-	_err := ctx.GetStub().PutState(id, chickenAsBytes)
+	_err := ctx.GetStub().PutState(id, assetAsBytes)
 
 	if _err != nil {
 		return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
 	}
 
-	_chicken := new(Chicken)
-	_ = json.Unmarshal(chickenAsBytes, _chicken)
-
-	return _chicken, nil
+	
+	return asset, nil
 
 }
 
-func (s *SmartContract) SetBatchPublicToSell(ctx contractapi.TransactionContextInterface, id string, owner string) (*Batch, error) {
-	batch, err := s.QueryBatch(ctx, id)
+func (s *SmartContract) ChangeAssetOwner(ctx contractapi.TransactionContextInterface, id string, owner string, newOwner string) (*Asset, error) {
+	asset, err := s.QueryAsset(ctx, id)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if batch.Owner == owner {
-		batch.ForSale = true
-		batch.TxType = "SetBatchPublic"
+	if asset.Owner == owner {
+		asset.Owner = newOwner
+		asset.TxType = "ChangeOwner"
 	}
 
-	batchAsBytes, _ := json.Marshal(batch)
+	assetAsBytes, _ := json.Marshal(asset)
 
-	_err := ctx.GetStub().PutState(id, batchAsBytes)
+	_err := ctx.GetStub().PutState(id, assetAsBytes)
 
 	if _err != nil {
 		return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
 	}
 
-	_batch := new(Batch)
-	_ = json.Unmarshal(batchAsBytes, _batch)
+	
+	return asset, nil
 
-	return _batch, nil
+}
+
+func (s *SmartContract) ChangeAssetOwnerPhone(ctx contractapi.TransactionContextInterface, id string, owner string, newOwner string) (*Asset, error) {
+	asset, err := s.QueryAsset(ctx, id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if asset.Status == "FinalProduct" {
+		asset.Owner = newOwner
+		asset.TxType = "ChangeOwner"
+	}
+
+	assetAsBytes, _ := json.Marshal(asset)
+
+	_err := ctx.GetStub().PutState(id, assetAsBytes)
+
+	if _err != nil {
+		return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
+	}
+
+	return asset, nil
+
+}
+
+func (s *SmartContract) ChangeAssetStatus(ctx contractapi.TransactionContextInterface, id string, owner string, status string) (*Asset, error) {
+	asset, err := s.QueryAsset(ctx, id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if asset.Owner == owner{
+		asset.Status = status
+		asset.TxType = "ChangeStatus"
+	}
+
+	assetAsBytes, _ := json.Marshal(asset)
+
+	_err := ctx.GetStub().PutState(id, assetAsBytes)
+
+	if _err != nil {
+		return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
+	}
+
+
+	return asset, nil
+
+}
+
+func (s *SmartContract) SetAssetPrice(ctx contractapi.TransactionContextInterface, id string, price float64, owner string) (*Asset, error) {
+	asset, err := s.QueryAsset(ctx, id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if asset.Owner == owner {
+		asset.Price = price
+		asset.TxType = "SetPrice"
+		assetAsBytes, _ := json.Marshal(asset)
+
+		_err := ctx.GetStub().PutState(id, assetAsBytes)
+
+		if _err != nil {
+			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
+		}
+
+		return asset, nil
+	} else {
+		return nil, fmt.Errorf("You are not owner of this asset")
+	}
+
+}
+
+func (s *SmartContract) SetAssetPublicToSell(ctx contractapi.TransactionContextInterface, id string, owner string) (*Asset, error) {
+	asset, err := s.QueryAsset(ctx, id)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if asset.Owner == owner {
+		asset.ForSale = true
+		asset.TxType = "SetAssetPublic"
+	}
+
+	assetAsBytes, _ := json.Marshal(asset)
+
+	_err := ctx.GetStub().PutState(id, assetAsBytes)
+
+	if _err != nil {
+		return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
+	}
+
+	return asset, nil
 
 }
 
@@ -796,9 +643,10 @@ func (s *SmartContract) BlockingToken(ctx contractapi.TransactionContextInterfac
 
 }
 
-func (s *SmartContract) SellChicken(ctx contractapi.TransactionContextInterface, id string, owner string, customer string, price float64, biders string, bids string) (*Chicken, error) {
+func (s *SmartContract) SellAsset(ctx contractapi.TransactionContextInterface, 
+	id string, owner string, customer string, price float64, biders string, bids string) (*Asset, error) {
 
-	chicken, err := s.QueryChicken(ctx, id)
+	asset, err := s.QueryAsset(ctx, id)
 
 	if err != nil {
 		return nil, err
@@ -816,7 +664,7 @@ func (s *SmartContract) SellChicken(ctx contractapi.TransactionContextInterface,
 		return nil, err
 	}
 
-	if chicken.Owner == owner {
+	if asset.Owner == owner {
 
 		customer_token.BlockAmount = customer_token.BlockAmount - price
 		cTokenAsBytes, _ := json.Marshal(customer_token)
@@ -830,12 +678,12 @@ func (s *SmartContract) SellChicken(ctx contractapi.TransactionContextInterface,
 		if _err__ != nil {
 			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
 		}
-		chicken.Owner = customer
-		chicken.TxType = "SellChicken"
-		chicken.ForSale = false
+		asset.Owner = customer
+		asset.TxType = "SellAsset"
+		asset.ForSale = false
 
-		chickenAsBytes, _ := json.Marshal(chicken)
-		_err := ctx.GetStub().PutState(id, chickenAsBytes)
+		assetAsBytes, _ := json.Marshal(asset)
+		_err := ctx.GetStub().PutState(id, assetAsBytes)
 		if _err != nil {
 			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
 		}
@@ -860,9 +708,9 @@ func (s *SmartContract) SellChicken(ctx contractapi.TransactionContextInterface,
 			}
 		}
 		                                                                                 
-		_chicken := new(Chicken)
-		_ = json.Unmarshal(chickenAsBytes, _chicken)
-		return _chicken, nil
+		// _asset := new(Asset)
+		// _ = json.Unmarshal(assetAsBytes, _asset)
+		return asset, nil
 
 	} else {
 		return nil, fmt.Errorf("You are not owner of this asset. %s", err.Error())
@@ -870,83 +718,9 @@ func (s *SmartContract) SellChicken(ctx contractapi.TransactionContextInterface,
 
 }
 
-func (s *SmartContract) SellBatch(ctx contractapi.TransactionContextInterface, id string, owner string, customer string, price float64, biders string, bids string) (*Batch, error) {
+func (s *SmartContract) PutAssetsInBatch(ctx contractapi.TransactionContextInterface, assetsIds string, owner string, batchId string) (*Asset, error) {
 
-	batch, err := s.QueryBatch(ctx, id)
-
-	if err != nil {
-		return nil, err
-	}
-
-	customer_token, err := s.QueryToken(ctx, customer)
-
-	if err != nil {
-		return nil, err
-	}
-
-	owner_token, err := s.QueryToken(ctx, owner)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if batch.Owner == owner {
-
-		customer_token.BlockAmount = customer_token.BlockAmount - price
-		cTokenAsBytes, _ := json.Marshal(customer_token)
-		_err_ := ctx.GetStub().PutState(customer, cTokenAsBytes)
-		if _err_ != nil {
-			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
-		}
-		owner_token.Amount = owner_token.Amount + price
-		oTokenAsBytes, _ := json.Marshal(owner_token)
-		_err__ := ctx.GetStub().PutState(owner, oTokenAsBytes)
-		if _err__ != nil {
-			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
-		}
-		batch.Owner = customer
-		batch.TxType = "SellBatch"
-		batch.ForSale = false
-
-		batchAsBytes, _ := json.Marshal(batch)
-		_err := ctx.GetStub().PutState(id, batchAsBytes)
-		if _err != nil {
-			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
-		}
-
-		if biders != "" {
-			bidersArr := strings.Split(biders, "#")
-			bidsArr := strings.Split(bids, "#")
-	
-			for i := 0; i < len(bidersArr); i++ {
-	
-				bid, _ := strconv.ParseFloat(bidsArr[i], 8)
-	
-				token, err := s.QueryToken(ctx, bidersArr[i])
-				token.BlockAmount = token.BlockAmount - bid
-				token.Amount = token.Amount + bid
-				tokenAsBytes, _ := json.Marshal(token)
-				_err := ctx.GetStub().PutState(bidersArr[i], tokenAsBytes)
-				if _err != nil {
-					return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
-				}
-	
-			}
-		}
-		                                                                                 
-		_batch := new(Batch)
-		_ = json.Unmarshal(batchAsBytes, _batch)
-		return _batch, nil
-
-	} else {
-		return nil, fmt.Errorf("You are not owner of this asset. %s", err.Error())
-	}
-
-}
-
-func (s *SmartContract) PutAssetsInBatch(ctx contractapi.TransactionContextInterface, assetsIds string, owner string, batchId string) (*Batch, error) {
-
-	batch, err := s.QueryBatch(ctx, batchId)
+	batch, err := s.QueryAsset(ctx, batchId)
 
 	if err != nil {
 		return nil, err
@@ -956,19 +730,19 @@ func (s *SmartContract) PutAssetsInBatch(ctx contractapi.TransactionContextInter
 
 		assetsArr := strings.Split(assetsIds, "#")
 		for i := 0; i < len(assetsArr); i++ {
-			chicken, err := s.QueryChicken(ctx, assetsArr[i])
+			asset, err := s.QueryAsset(ctx, assetsArr[i])
 			if err != nil {
 				return nil, err
 			}
-			if chicken.Owner == owner {
-				chicken.Owner = batchId
-				chicken.TxType = "PutInBatch"
-				chickenAsBytes, _ := json.Marshal(chicken)
-				_err := ctx.GetStub().PutState(assetsArr[i], chickenAsBytes)
+			if asset.Owner == owner {
+				asset.Owner = batchId
+				asset.TxType = "PutInBatch"
+				assetAsBytes, _ := json.Marshal(asset)
+				_err := ctx.GetStub().PutState(assetsArr[i], assetAsBytes)
 				if _err != nil {
 					return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
 				}
-				batch.Count = batch.Count + 1
+				batch.ChildesCount = batch.ChildesCount + 1
 			}
 		}
 
@@ -980,9 +754,9 @@ func (s *SmartContract) PutAssetsInBatch(ctx contractapi.TransactionContextInter
 			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
 		}
 
-		_batch := new(Batch)
-		_ = json.Unmarshal(batchAsBytes, _batch)
-		return _batch, nil		
+		// _batch := new(Batch)
+		// _ = json.Unmarshal(batchAsBytes, _batch)
+		return batch, nil		
 
 	} else {
 		return nil, fmt.Errorf("You are not owner of this asset. %s", err.Error())
@@ -990,9 +764,9 @@ func (s *SmartContract) PutAssetsInBatch(ctx contractapi.TransactionContextInter
 
 }
 
-func (s *SmartContract) RemoveAssetsFromBatch(ctx contractapi.TransactionContextInterface, assetsIds string, owner string, batchId string) (*Batch, error) {
+func (s *SmartContract) RemoveAssetsFromBatch(ctx contractapi.TransactionContextInterface, assetsIds string, owner string, batchId string) (*Asset, error) {
 
-	batch, err := s.QueryBatch(ctx, batchId)
+	batch, err := s.QueryAsset(ctx, batchId)
 
 	if err != nil {
 		return nil, err
@@ -1002,19 +776,19 @@ func (s *SmartContract) RemoveAssetsFromBatch(ctx contractapi.TransactionContext
 
 		assetsArr := strings.Split(assetsIds, "#")
 		for i := 0; i < len(assetsArr); i++ {
-			chicken, err := s.QueryChicken(ctx, assetsArr[i])
+			asset, err := s.QueryAsset(ctx, assetsArr[i])
 			if err != nil {
 				return nil, err
 			}
-			if chicken.Owner == batchId {
-				chicken.Owner = owner
-				chicken.TxType = "RemoveFromBatch"
-				chickenAsBytes, _ := json.Marshal(chicken)
-				_err := ctx.GetStub().PutState(assetsArr[i], chickenAsBytes)
+			if asset.Owner == batchId {
+				asset.Owner = owner
+				asset.TxType = "RemoveFromBatch"
+				assetAsBytes, _ := json.Marshal(asset)
+				_err := ctx.GetStub().PutState(assetsArr[i], assetAsBytes)
 				if _err != nil {
 					return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
 				}
-				batch.Count = batch.Count - 1
+				batch.ChildesCount = batch.ChildesCount - 1
 			}
 		}
 
@@ -1026,9 +800,9 @@ func (s *SmartContract) RemoveAssetsFromBatch(ctx contractapi.TransactionContext
 			return nil, fmt.Errorf("Failed to put to world state. %s", err.Error())
 		}
 
-		_batch := new(Batch)
-		_ = json.Unmarshal(batchAsBytes, _batch)
-		return _batch, nil		
+		// _batch := new(Batch)
+		// _ = json.Unmarshal(batchAsBytes, _batch)
+		return batch, nil		
 
 	} else {
 		return nil, fmt.Errorf("You are not owner of this asset. %s", err.Error())
