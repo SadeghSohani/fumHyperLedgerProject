@@ -86,6 +86,8 @@ app.use((req, res, next) => {
         } else {
             req.username = decoded.username;
             req.orgname = decoded.orgName;
+            req.role = decoded.role;
+            req.userType = decoded.userType;
             logger.debug(util.format('Decoded from JWT token: username - %s, orgname - %s', decoded.username, decoded.orgName));
             return next();
         }
@@ -128,7 +130,7 @@ app.post('/database/table/create', async function(req, res){
                 return;
             }
             console.log("Connected!");
-            var sql = "CREATE TABLE organizations (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), username VARCHAR(255), password VARCHAR(255), role VARCHAR(255), information TEXT)";
+            var sql = "CREATE TABLE organizations (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), username VARCHAR(255), password VARCHAR(255), userType VARCHAR(255), role VARCHAR(255), information TEXT, batchSize INT)";
             databaseCon.query(sql, function (err, result) {
                 if (err) {
                     console.log(err);
@@ -179,16 +181,20 @@ app.post('/organizations/insert', async function(req, res){
     var names = req.body.names;
     var usernames = req.body.usernames;
     var passwords = req.body.passwords;
+    var usersType = req.body.usersType;
     var roles = req.body.roles;
     var informations = req.body.informations;
+    var batchSize = req.body.batchSize;
 
     console.log(names);
     console.log(usernames);
     console.log(passwords);
     console.log(roles);
     console.log(informations);
+    console.log(usersType);
+    console.log(batchSize);
 
-    if (usernames.length != passwords.length || usernames.length != roles.length || passwords.length != roles.length) {
+    if (usernames.length == passwords.length == roles.length == usersType.length == batchSize.length) {
         res.json({ success: false, message: "Invalid input arguments." });
         return;
     }
@@ -200,10 +206,10 @@ app.post('/organizations/insert', async function(req, res){
                 return;
             }
             console.log("Connected to database.");
-            var sql = "INSERT INTO organizations (name, username, password, role, information) VALUES ?";
+            var sql = "INSERT INTO organizations (name, username, password, userType, role, information, batchSize) VALUES ?";
             var values = [];
             for(var i = 0; i < usernames.length; i++) {
-                values.push([names[i], usernames[i], passwords[i], roles[i], informations[i]]);
+                values.push([names[i], usernames[i], passwords[i], usersType[i], roles[i], informations[i], batchSize[i]]);
             }
             databaseCon.query(sql,[values], function (err, result) {
                 if (err) {
@@ -392,10 +398,23 @@ app.post('/users', async function (req, res) {
                     resLength = result.length;
                 }
                 if (resLength != 0 || (username == adminUsername && password == adminPassword)){
+
+                    var role = "";
+                    var userType = "";
+                    if (resLength == 0) {
+                        role = "Admin";
+                        userType = "Admin";
+                    } else {
+                        role = result[0].role;
+                        userType = result[0].userType;
+                    }
+
                     var token = jwt.sign({
                         exp: Math.floor(Date.now() / 1000) + parseInt(constants.jwt_expiretime),
                         username: username,
-                        orgName: orgName
+                        orgName: orgName,
+                        role: role,
+                        userType: userType
                     }, app.get('secret'));
                 
                     let response = await helper.getRegisteredUser(username, orgName, true);
@@ -426,7 +445,7 @@ app.post('/users', async function (req, res) {
 //----------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------
 
-app.post('/channels/:channelName/chaincodes/:chaincodeName/asset/create', async function (req, res) {
+app.post('/channels/:channelName/chaincodes/:chaincodeName/batch/create', async function (req, res) {
 
     if (req.username == adminUsername) {
         res.json({ success: false, message: "Permission denied."});
@@ -443,22 +462,24 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/asset/create', async 
         var channelName = req.params.channelName;
         var price = req.body.price;
         //new
-        var nickname = req.body.nickname;
-        var assetType = req.body.assetType;
+        var assetType = "Batch";
         var tag = req.body.tag;
         var status = req.body.status;
 
+        let role = req.role;
+        let userType = req.userType;
 
         console.log("id ======================== "+id)
 
         logger.debug('channelName  : ' + channelName);
         logger.debug('chaincodeName : ' + chaincodeName);
         logger.debug('price  : ' + price);
-
-        logger.debug('nickname  : ' + nickname);
         logger.debug('assetType  : ' + assetType);
         logger.debug('tag  : ' + tag);
         logger.debug('status  : ' + status);
+        logger.debug('====================================');
+        logger.debug('role  : ' + role);
+        logger.debug('userType  : ' + userType);
 
         if (!chaincodeName) {
             res.json(getErrorMessage('\'chaincodeName\''));
@@ -473,7 +494,7 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/asset/create', async 
             return;
         }
 
-        let message = await invoke.createAsset(channelName, chaincodeName, req.username, req.orgname, id, nickname, assetType, tag, status, price, owner);
+        let message = await invoke.createAsset(channelName, chaincodeName, req.username, req.orgname, id, assetType, tag, status, price, owner);
         console.log(`message result is : ${message}`)
 
         const response_payload = {
@@ -511,10 +532,11 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/asset/create', async 
 
 app.post('/channels/:channelName/chaincodes/:chaincodeName/asset/create/bulk', async function (req, res) {
 
-    if (req.username == adminUsername) {
+    if (req.username == adminUsername || req.userType != "Factory") {
         res.json({ success: false, message: "Permission denied."});
         return;
     }
+
 
     try {
 
@@ -527,7 +549,6 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/asset/create/bulk', a
         let owner = req.username;
 
         //new
-        var nickname = req.body.nickname;
         var assetType = req.body.assetType;
         var tag = req.body.tag;
         var status = req.body.status;
@@ -536,7 +557,6 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/asset/create/bulk', a
         logger.debug('channelName  : ' + channelName);
         logger.debug('chaincodeName : ' + chaincodeName);
         logger.debug('price  : ' + price);
-        logger.debug('nickname  : ' + nickname);
         logger.debug('assetType  : ' + assetType);
         logger.debug('tag  : ' + tag);
         logger.debug('status  : ' + status);
@@ -567,7 +587,7 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/asset/create/bulk', a
         console.log("assetsIds array : " + assetsIdsStr);
 
 
-        let message = await invoke.createBulkAssets(channelName, chaincodeName, req.username, req.orgname, assetsIdsStr, nickname, assetType, tag, status, price, owner);
+        let message = await invoke.createBulkAssets(channelName, chaincodeName, req.username, req.orgname, assetsIdsStr, assetType, tag, status, price, owner);
         console.log(`message result is : ${message}`)
 
         const response_payload = {
@@ -605,7 +625,7 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/asset/create/bulk', a
 
 app.post('/channels/:channelName/chaincodes/:chaincodeName/batch/create/asset/bulk', async function (req, res) {
 
-    if (req.username == adminUsername) {
+    if (req.username == adminUsername || req.userType != "Factory") {
         res.json({ success: false, message: "Permission denied."});
         return;
     }
@@ -615,11 +635,9 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/batch/create/asset/bu
         var chaincodeName = req.params.chaincodeName;
         var channelName = req.params.channelName;
         var price = req.body.price;
-        var count = req.body.count;
         let owner = req.username;
         //-------------------------------------
         //new
-        var nickname = req.body.nickname;
         var assetType = req.body.assetType;
         var tag = req.body.tag;
         var status = req.body.status;
@@ -630,7 +648,6 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/batch/create/asset/bu
         logger.debug('chaincodeName : ' + chaincodeName);
         logger.debug('price  : ' + price);
 
-        logger.debug('nickname  : ' + nickname);
         logger.debug('assetType  : ' + assetType);
         logger.debug('tag  : ' + tag);
         logger.debug('status  : ' + status);
@@ -648,45 +665,91 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/batch/create/asset/bu
             return;
         }
 
-    
-        var firstIterate = true;
-        var assetsIdsStr = "";
-        for (let i = 0; i < count; i++)  {
-            if(!firstIterate) {
-                assetsIdsStr = assetsIdsStr + "#";
-            }
-            firstIterate = false;
-            assetsIdsStr = assetsIdsStr + uuidv4(); 
-        }
-        assetsIdsStr = assetsIdsStr + "";
-        console.log("assetsIds array : " + assetsIdsStr);
-
-
-        let message = await invoke.createBulkAssetsInBatch(channelName, chaincodeName, req.username, req.orgname, assetsIdsStr, nickname, assetType, tag, status, price, owner, batchId);
-        console.log(`message result is : ${message}`)
-
-        const response_payload = {
-            result: message,
-            error: null,
-            errorData: null
-        }
-
-        MongoClient.connect(url, function(err, db) {
-            if (err) {
-                console.log(err);
-            }
-            var dbo = db.db("mydb");
-            var myobj = { user: owner, assetId: batchId, assetType: "Batch", tx: "Create bulk chicken in batch.", date: Date(), details: message.result };
-            dbo.collection("Logs").insertOne(myobj, function(err, result) {
+        databaseCon.connect(
+            function(err){
                 if (err) {
                     console.log(err);
+                    const response_payload = {
+                        result: null,
+                        error: err,
+                        errorData:null
+                    }
+                    res.send(response_payload)
+                    return;
                 }
-                console.log("Log successful");
-                db.close();
-            });
-        });
+                console.log("Connected to database.");
+                var sql = "SELECT * FROM organizations WHERE `username` = '"+owner+"'";
+                databaseCon.query(sql, async function (err, result) {
 
-        res.send(response_payload); 
+                    if (err) {
+                        console.log(err);
+                        const response_payload = {
+                            result: null,
+                            error: err,
+                            errorData:null
+                        }
+                        res.send(response_payload)
+                        return;
+                    }
+
+                    var count = result[0].batchSize;
+
+                    if (count <= 0) {
+                        console.log("You dont have permission to create batch.");
+                        const response_payload = {
+                            result: null,
+                            error: "You dont have permission to create batch.",
+                            errorData:null
+                        }
+                        res.send(response_payload)
+                        return;
+                    }
+                    
+                    var firstIterate = true;
+                    var assetsIdsStr = "";
+                    for (let i = 0; i < count; i++)  {
+                        if(!firstIterate) {
+                            assetsIdsStr = assetsIdsStr + "#";
+                        }
+                        firstIterate = false;
+                        assetsIdsStr = assetsIdsStr + uuidv4(); 
+                    }
+                    assetsIdsStr = assetsIdsStr + "";
+                    console.log("assetsIds array : " + assetsIdsStr);
+            
+            
+                    let message = await invoke.createBulkAssetsInBatch(channelName, chaincodeName, req.username, req.orgname, assetsIdsStr, assetType, tag, status, price, owner, batchId);
+                    console.log(`message result is : ${message}`)
+            
+                    const response_payload = {
+                        result: message,
+                        error: null,
+                        errorData: null
+                    }
+            
+                    MongoClient.connect(url, function(err, db) {
+                        if (err) {
+                            console.log(err);
+                        }
+                        var dbo = db.db("mydb");
+                        var myobj = { user: owner, assetId: batchId, assetType: "Batch", tx: "Create bulk chicken in batch.", date: Date(), details: message.result };
+                        dbo.collection("Logs").insertOne(myobj, function(err, result) {
+                            if (err) {
+                                console.log(err);
+                            }
+                            console.log("Log successful");
+                            db.close();
+                        });
+                    });
+            
+                    res.send(response_payload); 
+
+
+    
+                });
+            }
+        );
+
 
     } catch (error) {
         const response_payload = {
@@ -808,9 +871,7 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/token/transfer', asyn
     }
 });
 
-//---------------------------------------------------------------------------------------
-
-app.post('/channels/:channelName/chaincodes/:chaincodeName/metadata/put', async function (req, res) {
+app.post('/channels/:channelName/chaincodes/:chaincodeName/attr/put', async function (req, res) {
 
     if (req.username == adminUsername) {
         res.json({ success: false, message: "Permission denied."});
@@ -857,7 +918,74 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/metadata/put', async 
             return;
         }
 
-        let message = await invoke.putMetadata(channelName, chaincodeName, req.username, req.orgname, id, key, value, instruction);
+        let message = await invoke.putAttr(channelName, chaincodeName, req.username, req.orgname, id, key, value, instruction);
+        console.log(`message result is : ${message}`)
+
+        const response_payload = {
+            result: message,
+            error: null,
+            errorData: null
+        }
+        res.send(response_payload);
+
+    } catch (error) {
+        const response_payload = {
+            result: null,
+            error: error.name,
+            errorData: error.message
+        }
+        res.send(response_payload)
+    }
+});
+
+app.post('/channels/:channelName/chaincodes/:chaincodeName/batch/attr/put', async function (req, res) {
+
+    if (req.username == adminUsername) {
+        res.json({ success: false, message: "Permission denied."});
+        return;
+    }
+
+    try {
+        logger.debug('==================== INVOKE ON CHAINCODE ==================');
+        var chaincodeName = req.params.chaincodeName;
+        var channelName = req.params.channelName;
+        var id = req.body.batchId;
+        var key = req.body.key;
+        var value = req.body.value;
+        var instruction = req.body.instruction;
+
+        logger.debug('channelName  : ' + channelName);
+        logger.debug('chaincodeName : ' + chaincodeName);
+        logger.debug('id  : ' + id);
+        logger.debug('key  : ' + key);
+        logger.debug('value  : ' + value);
+        logger.debug('instruction  : ' + instruction);
+        if (!chaincodeName) {
+            res.json(getErrorMessage('\'chaincodeName\''));
+            return;
+        }
+        if (!channelName) {
+            res.json(getErrorMessage('\'channelName\''));
+            return;
+        }
+        if (!id) {
+            res.json(getErrorMessage('\'id\''));
+            return;
+        }
+        if (!key) {
+            res.json(getErrorMessage('\'key\''));
+            return;
+        }
+        if (!value) {
+            res.json(getErrorMessage('\'value\''));
+            return;
+        }
+        if (!instruction) {
+            res.json(getErrorMessage('\'instruction\''));
+            return;
+        }
+
+        let message = await invoke.putAttrForAssetsInBatch(channelName, chaincodeName, req.username, req.orgname, id, key, value, instruction);
         console.log(`message result is : ${message}`)
 
         const response_payload = {
@@ -1035,6 +1163,65 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/asset/status/change',
 
     } catch (error) {
         const response_payload = {
+            success: false,
+            result: null,
+            error: error.name,
+            errorData: error.message
+        }
+        res.send(response_payload)
+    }
+});
+
+app.post('/channels/:channelName/chaincodes/:chaincodeName/assetsInBatch/status/change', async function (req, res) {
+
+    if (req.username == adminUsername) {
+        res.json({ success: false, message: "Permission denied."});
+        return;
+    }
+
+    try {
+        logger.debug('==================== INVOKE ON CHAINCODE ==================');
+        var chaincodeName = req.params.chaincodeName;
+        var channelName = req.params.channelName;
+        var id = req.body.batchId;
+        var status = req.body.status;
+
+        let owner = req.username;
+
+        logger.debug('channelName  : ' + channelName);
+        logger.debug('chaincodeName : ' + chaincodeName);
+        logger.debug('id  : ' + id);
+        logger.debug('status  : ' + status);
+        if (!chaincodeName) {
+            res.json(getErrorMessage('\'chaincodeName\''));
+            return;
+        }
+        if (!channelName) {
+            res.json(getErrorMessage('\'channelName\''));
+            return;
+        }
+        if (!id) {
+            res.json(getErrorMessage('\'id\''));
+            return;
+        }
+        if (!status) {
+            res.json(getErrorMessage('\'status\''));
+            return;
+        }
+
+        let message = await invoke.changeStatusForAssetsInBatch(channelName, chaincodeName, req.username, req.orgname, id, owner, status);
+        console.log(`message result is : ${message}`)
+
+        const response_payload = {
+            result: message,
+            error: null,
+            errorData: null
+        }
+        res.send(response_payload);
+
+    } catch (error) {
+        const response_payload = {
+            success: false,
             result: null,
             error: error.name,
             errorData: error.message
@@ -1111,7 +1298,8 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/collection/:collectio
         var channelName = req.params.channelName;
         var collectionName = req.params.collectionName
         var assetId = req.body.assetId;
-        var price = req.body.price;
+        var price = 0.0;
+        price = req.body.price;
 
         let user = req.username;
 
@@ -1137,7 +1325,7 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/collection/:collectio
             return;
         }
 
-        let message = await invoke.setAssetPublicToSell(channelName, chaincodeName, req.username, req.orgname, assetId, user);
+        let message = await invoke.setAssetPublicToSell(channelName, chaincodeName, req.username, req.orgname, assetId, user, price, req.userType);
         console.log(`message result is : ${message}`)
 
         var asset = message.body;
@@ -1172,6 +1360,7 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/collection/:collectio
 
     } catch (error) {
         const response_payload = {
+            success: false,
             result: null,
             error: error.name,
             errorData: error.message
@@ -1277,11 +1466,6 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/asset/bid', async fun
         res.send(response_payload)
     }
 });
-
-
-
-
-
 
 app.post('/channels/:channelName/chaincodes/:chaincodeName/batch/add', async function (req, res) {
 
@@ -1425,7 +1609,7 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/batch/remove', async 
     }
 });
 
-app.post('/channels/:channelName/chaincodes/:chaincodeName/chicken/sell', async function (req, res) {
+app.post('/channels/:channelName/chaincodes/:chaincodeName/asset/sell', async function (req, res) {
 
     if (req.username == adminUsername) {
         res.json({ success: false, message: "Permission denied."});
@@ -1551,9 +1735,63 @@ app.post('/channels/:channelName/chaincodes/:chaincodeName/chicken/sell', async 
     }
 });
 
+app.post('/channels/:channelName/chaincodes/:chaincodeName/shop/send', async function (req, res) {
 
+    if (req.username == adminUsername || req.userType != "Retailer") {
+        res.json({ success: false, message: "Permission denied."});
+        return;
+    }
 
+    try {
+        logger.debug('==================== INVOKE ON CHAINCODE ==================');
+        var chaincodeName = req.params.chaincodeName;
+        var channelName = req.params.channelName;
+        var id = req.body.id;
+        var price = req.body.price;
 
+        let owner = req.username;
+
+        logger.debug('channelName  : ' + channelName);
+        logger.debug('chaincodeName : ' + chaincodeName);
+        logger.debug('id  : ' + id);
+        logger.debug('price  : ' + price);
+        if (!chaincodeName) {
+            res.json(getErrorMessage('\'chaincodeName\''));
+            return;
+        }
+        if (!channelName) {
+            res.json(getErrorMessage('\'channelName\''));
+            return;
+        }
+        if (!id) {
+            res.json(getErrorMessage('\'id\''));
+            return;
+        }
+        if (!price) {
+            res.json(getErrorMessage('\'price\''));
+            return;
+        }
+
+        let message = await invoke.sendToShop(channelName, chaincodeName, req.username, req.orgname, id, owner, price);
+        console.log(`message result is : ${message}`)
+
+        const response_payload = {
+            result: message,
+            error: null,
+            errorData: null
+        }
+        res.send(response_payload);
+
+    } catch (error) {
+        const response_payload = {
+            success: false,
+            result: null,
+            error: error.name,
+            errorData: error.message
+        }
+        res.send(response_payload)
+    }
+});
 
 //----------------------------------------------------------------------------------------------
 //----------------------------------------------------------------------------------------------
@@ -2091,5 +2329,57 @@ app.get('/collection/:collectionName/user/history', async function(req, res){
             res.send(response_payload);
         });
     }); 
+
+});
+
+app.get('/batchSize', async function(req, res){
+
+    var username = req.username;
+    
+    databaseCon.connect(
+        function(err){
+            if (err) {
+                console.log(err);
+                const response_payload = {
+                    result: null,
+                    error: err,
+                    errorData:null
+                }
+                res.send(response_payload)
+                return;
+            }
+            console.log("Connected to database.");
+            var sql = "SELECT * FROM organizations WHERE `username` = '"+username+"'";
+            databaseCon.query(sql, async function (err, result) {
+
+                if (err) {
+                    console.log(err);
+                    const response_payload = {
+                        result: null,
+                        error: err,
+                        errorData:null
+                    }
+                    res.send(response_payload)
+                    return;
+                }
+
+                var batchSize = result[0].batchSize;
+
+               
+                const response_payload = {
+                    result: {
+                        batchSize: batchSize
+                    },
+                    error: null,
+                    errorData: null
+                }
+        
+                res.send(response_payload); 
+
+
+
+            });
+        }
+    );
 
 });
