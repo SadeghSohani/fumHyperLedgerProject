@@ -60,8 +60,8 @@ presetup() {
 CHANNEL_NAME="mychannel"
 CC_RUNTIME_LANGUAGE="golang"
 VERSION="1"
-CC_SRC_PATH="./smart-contracts/broilerChickenCC/go"
-CC_NAME="broilerChickenCC"
+CC_SRC_PATH="./smart-contracts/chaincode/go"
+CC_NAME="chaincode"
 
 packageChaincode() {
     rm -rf ${CC_NAME}.tar.gz
